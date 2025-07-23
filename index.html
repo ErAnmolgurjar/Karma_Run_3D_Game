@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Karma Run 3D - Seva Edition</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif; /* Using Inter font */
+            background-color: #f0f0f0; /* Light background for overall page */
+        }
+        canvas {
+            display: block;
+            background-color: #87ceeb; /* Sky blue background for the game world */
+            width: 100%;
+            height: 100%;
+        }
+        #scoreboard {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px 30px;
+            font-size: 22px;
+            font-weight: bold;
+            color: #333;
+            border-radius: 15px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+            border: 2px solid #ccc;
+            display: flex;
+            gap: 30px;
+            align-items: center;
+        }
+        .karma-score {
+            display: flex;
+            align-items: center;
+        }
+        .karma-icon {
+            font-size: 28px;
+            margin-right: 10px;
+        }
+        .good-karma-icon {
+            color: #4CAF50; /* Green for good karma */
+        }
+        .bad-karma-icon {
+            color: #f44336; /* Red for bad karma */
+        }
+        #message-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            font-size: 24px;
+            z-index: 100;
+            display: none; /* Hidden by default */
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+        }
+        #message-box button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            margin-top: 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        #message-box button:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <!-- Scoreboard with enhanced styling and icons -->
+    <div id="scoreboard">
+        <div class="karma-score">
+            <span class="karma-icon good-karma-icon">😊</span>
+            Good Karma: <span id="good-karma-value">0</span>
+        </div>
+        <div class="karma-score">
+            <span class="karma-icon bad-karma-icon">😞</span>
+            Bad Karma: <span id="bad-karma-value">0</span>
+        </div>
+    </div>
+
+    <!-- Message box for game over/instructions -->
+    <div id="message-box">
+        <p id="message-text"></p>
+        <button id="restart-button">Restart Game</button>
+    </div>
+
+    <!-- Three.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
+    <script>
+        // Global variables for Three.js scene, camera, and renderer
+        let scene, camera, renderer;
+        // Game state variables
+        let scoreboard, goodKarmaValue, badKarmaValue;
+        let karma = { good: 0, bad: 0 };
+        let player;
+        // Adjusted laneWidth to make lanes narrower and movement feel less "extreme"
+        const laneWidth = 7; // New width of each main lane
+        // Width of the road shoulders added to the sides
+        const roadShoulderWidth = 5;
+        // Updated lanePositions based on the new laneWidth
+        let lanePositions = [-laneWidth, 0, laneWidth]; // X positions for the three playable lanes
+        let currentLane = 1; // Player starts in the middle lane (index 1)
+        let obstacles = []; // Array to store active obstacles
+        let tokens = []; // Array to store active tokens
+        let gameSpeed = 0.2; // Initial speed of objects moving towards the player
+        let animationFrameId; // To store the ID of the requestAnimationFrame
+        let isGameOver = false; // Flag to control game state
+
+        // Initialize the Three.js scene, camera, and renderer
+        function init() {
+            // Scene setup
+            scene = new THREE.Scene();
+            // Set a background color for the scene (light blue for sky)
+            scene.background = new THREE.Color(0x87ceeb);
+
+            // Camera setup (PerspectiveCamera for 3D view)
+            // FOV, Aspect Ratio, Near Clipping Plane, Far Clipping Plane
+            // Increased FOV to ensure player is visible in all lanes.
+            camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
+            // Position the camera to look down the road
+            camera.position.set(0, 5, 12);
+            camera.lookAt(0, 1.5, 5); // Point camera towards the player and road
+
+            // Renderer setup (WebGLRenderer for rendering 3D graphics)
+            renderer = new THREE.WebGLRenderer({ antialias: true }); // Enable anti-aliasing for smoother edges
+            renderer.setSize(window.innerWidth, window.innerHeight); // Set renderer size to full window
+            document.body.appendChild(renderer.domElement); // Add renderer's canvas to the DOM
+
+            // Get scoreboard elements
+            scoreboard = document.getElementById("scoreboard");
+            goodKarmaValue = document.getElementById("good-karma-value");
+            badKarmaValue = document.getElementById("bad-karma-value");
+
+            // Add event listener for window resizing to make the game responsive
+            window.addEventListener('resize', onWindowResize, false);
+
+            // Setup initial game elements
+            setupRoad();
+            setupPlayer();
+            setupLighting();
+            resetGame(); // Call reset game to initialize karma and clear objects
+        }
+
+        // Function to handle window resizing
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Create the road with multiple lanes and dashed lines, including shoulders
+        function setupRoad() {
+            const roadGroup = new THREE.Group(); // Group to hold all road elements
+            const roadLength = 1000; // Length of the visible road
+
+            // Material for the main road lanes
+            const roadMat = new THREE.MeshBasicMaterial({ color: 0x333333 }); // Dark grey for road
+            // Material for the road shoulders (slightly different shade)
+            const shoulderMat = new THREE.MeshBasicMaterial({ color: 0x444444 });
+
+            // Create three main road lanes
+            for (let i = 0; i < 3; i++) {
+                const roadGeo = new THREE.PlaneGeometry(laneWidth, roadLength);
+                const lane = new THREE.Mesh(roadGeo, roadMat);
+                lane.rotation.x = -Math.PI / 2; // Rotate to lie flat on the XZ plane
+                // Position lanes side by side based on the new laneWidth
+                lane.position.x = -laneWidth + i * laneWidth;
+                roadGroup.add(lane);
+            }
+
+            // Calculate the x-position for the left shoulder
+            // It's to the left of the leftmost lane's center, plus half its own width
+            const leftShoulderX = -laneWidth - (laneWidth / 2) - (roadShoulderWidth / 2);
+            const shoulderLeftGeo = new THREE.PlaneGeometry(roadShoulderWidth, roadLength);
+            const shoulderLeft = new THREE.Mesh(shoulderLeftGeo, shoulderMat);
+            shoulderLeft.rotation.x = -Math.PI / 2;
+            shoulderLeft.position.x = leftShoulderX;
+            roadGroup.add(shoulderLeft);
+
+            // Calculate the x-position for the right shoulder
+            // It's to the right of the rightmost lane's center, plus half its own width
+            const rightShoulderX = laneWidth + (laneWidth / 2) + (roadShoulderWidth / 2);
+            const shoulderRightGeo = new THREE.PlaneGeometry(roadShoulderWidth, roadLength);
+            const shoulderRight = new THREE.Mesh(shoulderRightGeo, shoulderMat);
+            shoulderRight.rotation.x = -Math.PI / 2;
+            shoulderRight.position.x = rightShoulderX;
+            roadGroup.add(shoulderRight);
+
+
+            // Add dashed white strips between main lanes
+            const lineCount = 50; // Number of dashed lines
+            const stripLength = 4; // Length of each strip
+            const stripWidth = 0.3; // Width of each strip
+            const stripSpacing = roadLength / lineCount; // Spacing between strips
+
+            for (let i = 1; i < 3; i++) { // For the two lines between three lanes
+                for (let j = 0; j < lineCount; j++) {
+                    const lineGeo = new THREE.PlaneGeometry(stripWidth, stripLength);
+                    const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }); // White color
+                    const line = new THREE.Mesh(lineGeo, lineMat);
+                    line.rotation.x = -Math.PI / 2; // Rotate to lie flat
+                    // Position between lanes based on the new laneWidth
+                    line.position.x = -laneWidth / 2 + (i - 1) * laneWidth;
+                    line.position.z = -roadLength / 2 + j * stripSpacing; // Distribute along the road
+                    line.position.y = 0.01; // Slightly above the road to prevent Z-fighting
+                    roadGroup.add(line);
+                }
+            }
+            scene.add(roadGroup);
+        }
+
+        // Create the player character (a simple human running figure)
+        function setupPlayer() {
+            player = new THREE.Group(); // Group to hold all player body parts
+
+            // Torso
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.4), new THREE.MeshBasicMaterial({ color: 0x0077ff }));
+            torso.position.y = 1.8;
+            player.add(torso);
+
+            // Head
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), new THREE.MeshBasicMaterial({ color: 0xffcc99 }));
+            head.position.y = 2.7;
+            player.add(head);
+
+            // Legs
+            const legGeo = new THREE.BoxGeometry(0.2, 0.8, 0.2);
+            const legMat = new THREE.MeshBasicMaterial({ color: 0x333333 }); // Dark grey for pants/legs
+
+            const legLeft = new THREE.Mesh(legGeo, legMat);
+            legLeft.position.set(-0.2, 0.4, 0);
+            legLeft.rotation.z = 0.3; // Slight rotation for running pose
+            player.add(legLeft);
+
+            const legRight = new THREE.Mesh(legGeo, legMat);
+            legRight.position.set(0.2, 0.4, 0);
+            legRight.rotation.z = -0.3; // Slight rotation for running pose
+            player.add(legRight);
+
+            // Arms
+            const armGeo = new THREE.BoxGeometry(0.2, 0.8, 0.2);
+            const armMat = new THREE.MeshBasicMaterial({ color: 0x555555 }); // Grey for shirt/arms
+
+            const armLeft = new THREE.Mesh(armGeo, armMat);
+            armLeft.position.set(-0.6, 2.0, 0);
+            armLeft.rotation.z = -0.4; // Slight rotation for running pose
+            player.add(armLeft);
+
+            const armRight = new THREE.Mesh(armGeo, armMat);
+            armRight.position.set(0.6, 2.0, 0);
+            armRight.rotation.z = 0.4; // Slight rotation for running pose
+            player.add(armRight);
+
+            // Player's base Y position remains slightly above the road plane for better visibility.
+            player.position.set(lanePositions[currentLane], 0.2, 5); // Initial position in the middle lane
+            scene.add(player);
+        }
+
+        // Add ambient lighting to the scene
+        function setupLighting() {
+            const light = new THREE.AmbientLight(0xffffff, 1.0); // Soft white light from all directions
+            scene.add(light);
+        }
+
+        // Function to create an obstacle
+        function createObstacle(z) {
+            const geo = new THREE.BoxGeometry(1.5, 1.5, 1.5); // Larger obstacle
+            const mat = new THREE.MeshPhongMaterial({ color: 0xff4444, flatShading: true }); // Red, non-shiny
+            const ob = new THREE.Mesh(geo, mat);
+            // Randomly place obstacle in one of the three lanes
+            ob.position.set(lanePositions[Math.floor(Math.random() * 3)], 0.75, z);
+            scene.add(ob);
+            obstacles.push(ob);
+        }
+
+        // Function to create a token (good karma item)
+        function createToken(z) {
+            const geo = new THREE.SphereGeometry(0.6, 24, 24); // Slightly larger, smoother sphere
+            const mat = new THREE.MeshPhongMaterial({ color: 0xffdd00, flatShading: true }); // Yellow/gold
+            const token = new THREE.Mesh(geo, mat);
+            // Randomly place token in one of the three lanes
+            token.position.set(lanePositions[Math.floor(Math.random() * 3)], 0.6, z);
+            scene.add(token);
+            tokens.push(token);
+        }
+
+        // Game animation loop
+        function animate() {
+            if (isGameOver) return; // Stop animation if game is over
+
+            animationFrameId = requestAnimationFrame(animate); // Request next frame
+
+            // Move obstacles towards the player
+            obstacles.forEach((o, i) => {
+                o.position.z += gameSpeed; // Move along Z-axis
+                // Check if obstacle has passed the camera (missed)
+                if (o.position.z > camera.position.z) {
+                    scene.remove(o); // Remove from scene
+                    obstacles.splice(i, 1); // Remove from array
+                }
+                // Check for collision with player
+                // Using a simple bounding box collision check
+                const playerBox = new THREE.Box3().setFromObject(player);
+                const obstacleBox = new THREE.Box3().setFromObject(o);
+                if (playerBox.intersectsBox(obstacleBox)) {
+                    karma.bad++; // Increment bad karma for collision
+                    updateScoreboard();
+                    scene.remove(o);
+                    obstacles.splice(i, 1);
+                    // Optionally, add a visual/audio feedback for collision
+                }
+            });
+
+            // Move tokens towards the player
+            tokens.forEach((t, i) => {
+                t.position.z += gameSpeed; // Move along Z-axis
+                // Check if token has passed the camera (missed)
+                if (t.position.z > camera.position.z) {
+                    scene.remove(t);
+                    tokens.splice(i, 1);
+                }
+                // Check for collection by player
+                const playerBox = new THREE.Box3().setFromObject(player);
+                const tokenBox = new THREE.Box3().setFromObject(t);
+                if (playerBox.intersectsBox(tokenBox)) {
+                    karma.good++; // Increment good karma for collecting token
+                    updateScoreboard();
+                    scene.remove(t);
+                    tokens.splice(i, 1);
+                    // Optionally, add a visual/audio feedback for collection
+                }
+            });
+
+            // Update scoreboard display
+            updateScoreboard();
+
+            // Render the scene with the camera
+            renderer.render(scene, camera);
+
+            // Game over condition (example: if bad karma reaches a certain threshold)
+            if (karma.bad >= 10) {
+                endGame("Game Over! Too much bad karma.");
+            }
+        }
+
+        // Function to update the scoreboard display
+        function updateScoreboard() {
+            goodKarmaValue.innerText = karma.good;
+            badKarmaValue.innerText = karma.bad;
+        }
+
+        // Function to show a message box and stop the game
+        function showMessageBox(message) {
+            document.getElementById('message-text').innerText = message;
+            document.getElementById('message-box').style.display = 'block';
+        }
+
+        // Function to hide the message box
+        function hideMessageBox() {
+            document.getElementById('message-box').style.display = 'none';
+        }
+
+        // Function to end the game
+        function endGame(message) {
+            isGameOver = true;
+            cancelAnimationFrame(animationFrameId); // Stop the animation loop
+            clearInterval(obstacleSpawnInterval); // Stop spawning obstacles
+            clearInterval(tokenSpawnInterval); // Stop spawning tokens
+            showMessageBox(message);
+        }
+
+        // Function to reset the game state
+        function resetGame() {
+            // Clear existing obstacles and tokens from scene and arrays
+            obstacles.forEach(o => scene.remove(o));
+            tokens.forEach(t => scene.remove(t));
+            obstacles = [];
+            tokens = [];
+
+            karma = { good: 0, bad: 0 }; // Reset karma
+            updateScoreboard(); // Update scoreboard display
+
+            currentLane = 1; // Reset player to middle lane
+            player.position.x = lanePositions[currentLane]; // Update player position
+
+            gameSpeed = 0.2; // Reset game speed
+
+            isGameOver = false; // Reset game over flag
+            hideMessageBox(); // Hide any message box
+
+            // Restart spawning intervals
+            startSpawning();
+
+            // Restart animation loop if it was stopped
+            if (!animationFrameId || isGameOver) {
+                animate();
+            }
+        }
+
+        // Spawning intervals
+        let obstacleSpawnInterval;
+        let tokenSpawnInterval;
+
+        function startSpawning() {
+            // Clear any existing intervals to prevent duplicates on reset
+            if (obstacleSpawnInterval) clearInterval(obstacleSpawnInterval);
+            if (tokenSpawnInterval) clearInterval(tokenSpawnInterval);
+
+            // Spawn obstacles every 2 seconds
+            obstacleSpawnInterval = setInterval(() => {
+                if (!isGameOver) createObstacle(-100);
+            }, 2000);
+
+            // Spawn tokens every 3 seconds
+            tokenSpawnInterval = setInterval(() => {
+                if (!isGameOver) createToken(-100);
+            }, 3000);
+        }
+
+        // Key controls for player movement
+        window.addEventListener('keydown', (e) => {
+            if (isGameOver) return; // Disable controls if game is over
+
+            if (e.code === 'ArrowLeft' && currentLane > 0) {
+                currentLane--;
+                player.position.x = lanePositions[currentLane];
+            } else if (e.code === 'ArrowRight' && currentLane < 2) {
+                currentLane++;
+                player.position.x = lanePositions[currentLane];
+            }
+        });
+
+        // Touch controls for player movement (swipe left/right)
+        let touchStartX = 0;
+        window.addEventListener('touchstart', (e) => {
+            if (isGameOver) return;
+            touchStartX = e.touches[0].clientX;
+        });
+
+        window.addEventListener('touchend', (e) => {
+            if (isGameOver) return;
+            const touchEndX = e.changedTouches[0].clientX;
+            const swipeThreshold = 50; // Minimum distance for a swipe
+
+            if (touchEndX < touchStartX - swipeThreshold && currentLane > 0) {
+                currentLane--;
+                player.position.x = lanePositions[currentLane];
+            } else if (touchEndX > touchStartX + swipeThreshold && currentLane < 2) {
+                currentLane++;
+                player.position.x = lanePositions[currentLane];
+            }
+        });
+
+        // Event listener for the restart button
+        document.getElementById('restart-button').addEventListener('click', resetGame);
+
+        // Initialize the game when the window loads
+        window.onload = function () {
+            init(); // Setup scene, camera, renderer, and initial elements
+            startSpawning(); // Start spawning obstacles and tokens
+            animate(); // Start the animation loop
+        };
+    </script>
+</body>
+</html>
+
