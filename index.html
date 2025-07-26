@@ -282,8 +282,8 @@
         let gameSpeed = 0.2; // Initial speed of objects moving towards the player (now positive for world movement)
         const initialGameSpeed = 0.2; // Initial game speed for scaling difficulty
         const maxGameSpeed = 4.0; // Maximum game speed
-        const speedIncreaseRate = 0.01; // How much speed increases per interval
-        const speedIncreaseIntervalTime = 10000; // Increase speed every 5 seconds
+        const speedIncreaseRate = 0.03; // How much speed increases per interval
+        const speedIncreaseIntervalTime = 3000; // Increase speed every 5 seconds
         let animationFrameId; // To store the ID of the requestAnimationFrame
         let isGameOver = false; // Flag to control game state
         let isPaused = false; // Flag to control pause state
@@ -339,40 +339,42 @@
         let font = null;
 
         // Karma lists
-        const goodKarmas = [
-            { english: "Truthfulness", hindi: "सत्यता" },
-            { english: "Gratitude", hindi: "कृतज्ञता" },
-            { english: "Respect", hindi: "सम्मान" },
-            { english: "Integrity", hindi: "ईमानदारी" },
-            { english: "Guidance", hindi: "मार्गदर्शन" },
-            { english: "Compassion", hindi: "करुणा" },
-            { english: "Forgiveness", hindi: "क्षमा" },
-            { english: "Self-control", hindi: "आत्म-नियंत्रण" },
-            { english: "Spirituality", hindi: "आध्यात्मिकता" },
+       const goodKarmas = [
+            { english: "Truthfulness", hindi: "सच" },
+            { english: "Gratitude", hindi: "धन्यवाद" },
+            { english: "Respect", hindi: "आदर" },
+            { english: "Integrity", hindi: "सच्चाई" },
+            { english: "Guidance", hindi: "सुझाव" },
+            { english: "Compassion", hindi: "दया" },
+            { english: "Forgiveness", hindi: "माफ़ी" },
+            { english: "Self-control", hindi: "नियंत्रण" },
+            { english: "Spirituality", hindi: "भक्ति" },
             { english: "Charity", hindi: "दान" },
-            { english: "Discipline", hindi: "अनुशासन" },
-            { english: "Support", hindi: "प्रोत्साहन" },
-            { english: "Simplicity", hindi: "सादगी" },
-            { english: "Ahimsa", hindi: "अहिंसा" }
+            { english: "Discipline", hindi: "नियम" },
+            { english: "Support", hindi: "सहारा" },
+            { english: "Simplicity", hindi: "सादा" },
+            { english: "Ahimsa", hindi: "न हिंसा" }
         ];
 
+
         const badKarmas = [
-            { english: "Violence", hindi: "हिंसा" },
-            { english: "Deceit", hindi: "धोखा" },
+            { english: "Violence", hindi: "मारपीट" },
+            { english: "Deceit", hindi: "झूठ" },
             { english: "Theft", hindi: "चोरी" },
-            { english: "Disrespect", hindi: "अपमान" },
-            { english: "Slander", hindi: "निंदा" },
-            { english: "Greed", hindi: "लोभ" },
-            { english: "Exploitation", hindi: "शोषण" },
-            { english: "Cruelty", hindi: "क्रूरता" },
-            { english: "Addiction", hindi: "व्यसन" },
-            { english: "Malice", hindi: "द्वेष" },
-            { english: "Wastefulness", hindi: "अपव्यय" },
-            { english: "Ego", hindi: "अहंकार" },
-            { english: "Treachery", hindi: "विश्वासघात" },
-            { english: "Instigation", hindi: "भड़काना" },
-            { english: "Sloth", hindi: "आलस्य" }
+            { english: "Disrespect", hindi: "बेइज़्ज़ती" },
+            { english: "Slander", hindi: "बुराई" },
+            { english: "Greed", hindi: "लालच" },
+            { english: "Exploitation", hindi: "फायदा उठाना" },
+            { english: "Cruelty", hindi: "जुल्म" },
+            { english: "Addiction", hindi: "लत" },
+            { english: "Malice", hindi: "नफरत" },
+            { english: "Wastefulness", hindi: "फिजूलखर्ची" },
+            { english: "Ego", hindi: "घमंड" },
+            { english: "Treachery", hindi: "धोखा" },
+            { english: "Instigation", hindi: "उकसाना" },
+            { english: "Sloth", hindi: "सुस्ती" }
         ];
+
 
 
         // Initialize the Three.js scene, camera, and renderer
