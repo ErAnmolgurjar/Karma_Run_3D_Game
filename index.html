@@ -100,15 +100,31 @@
         <button id="restart-button">Restart Game</button>
     </div>
 
-    <!-- Three.js library -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
-    <script>
+    <!-- Import Map for Three.js modules -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <!-- Three.js library and FBXLoader -->
+    <script type="module">
+        import * as THREE from 'three';
+        import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
         // Global variables for Three.js scene, camera, and renderer
         let scene, camera, renderer;
         // Game state variables
         let scoreboard, goodKarmaValue, badKarmaValue;
         let karma = { good: 0, bad: 0 };
-        let player;
+        let player; // This will now hold the loaded FBX model
+        let mixer; // Animation mixer for the FBX model
+        let clock; // Clock for animation updates
+
         // Adjusted laneWidth to make lanes narrower and movement feel less "extreme"
         const laneWidth = 7; // New width of each main lane
         // Width of the road shoulders added to the sides
@@ -118,16 +134,34 @@
         let currentLane = 1; // Player starts in the middle lane (index 1)
         let obstacles = []; // Array to store active obstacles
         let tokens = []; // Array to store active tokens
-        let gameSpeed = 0.2; // Initial speed of objects moving towards the player
+        let gameSpeed = 0.2; // Initial speed of objects moving towards the player (now positive for world movement)
+        const maxGameSpeed = 1.0; // Maximum game speed
+        const speedIncreaseRate = 0.01; // How much speed increases per interval
+        const speedIncreaseIntervalTime = 5000; // Increase speed every 5 seconds
         let animationFrameId; // To store the ID of the requestAnimationFrame
         let isGameOver = false; // Flag to control game state
 
+        // Road movement variables
+        let roadSegments = []; // Array to store individual road segments for continuous movement
+        const roadSegmentLength = 40; // Length of each road segment
+        const roadSegmentCount = 10; // Number of road segments to create a continuous loop
+
+        // Tree model variables
+        let loadedTreeModel = null; // To store the loaded GLB tree model
+        const treeSpacing = 10; // Approximate visual width of the tree for spacing, adjust as needed for your model
+
+        // Player movement smoothing variables
+        let targetPlayerX; // The target X position the player is moving towards
+        const playerMoveSpeed = 0.1; // Controls the smoothness of lane changes (0.1 is a good starting point)
+        let speedIntervalId; // Interval ID for speed increase
+
         // Initialize the Three.js scene, camera, and renderer
-        function init() {
+        async function init() { // Made init async to await model loading
             // Scene setup
             scene = new THREE.Scene();
             // Set a background color for the scene (light blue for sky)
             scene.background = new THREE.Color(0x87ceeb);
+            scene.fog = new THREE.Fog(0x87ceeb, 50, 200); // Add fog for depth perception
 
             // Camera setup (PerspectiveCamera for 3D view)
             // FOV, Aspect Ratio, Near Clipping Plane, Far Clipping Plane
@@ -137,9 +171,14 @@
             camera.position.set(0, 5, 12);
             camera.lookAt(0, 1.5, 5); // Point camera towards the player and road
 
+            // Initialize clock for animation updates
+            clock = new THREE.Clock();
+
             // Renderer setup (WebGLRenderer for rendering 3D graphics)
             renderer = new THREE.WebGLRenderer({ antialias: true }); // Enable anti-aliasing for smoother edges
+            renderer.setPixelRatio(window.devicePixelRatio); // Set pixel ratio for high-res displays
             renderer.setSize(window.innerWidth, window.innerHeight); // Set renderer size to full window
+            renderer.shadowMap.enabled = true; // Enable shadows
             document.body.appendChild(renderer.domElement); // Add renderer's canvas to the DOM
 
             // Get scoreboard elements
@@ -150,11 +189,15 @@
             // Add event listener for window resizing to make the game responsive
             window.addEventListener('resize', onWindowResize, false);
 
-            // Setup initial game elements
-            setupRoad();
-            setupPlayer();
+            // Load all necessary 3D assets
+            await loadAssets();
+
+            // Setup initial game elements (now that models are loaded)
+            setupRoad(); // Now creates moving road segments and trees
             setupLighting();
+
             resetGame(); // Call reset game to initialize karma and clear objects
+            // The animation loop will be started after the models are loaded in loadAssets()
         }
 
         // Function to handle window resizing
@@ -164,118 +207,231 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        // Create the road with multiple lanes and dashed lines, including shoulders
-        function setupRoad() {
-            const roadGroup = new THREE.Group(); // Group to hold all road elements
-            const roadLength = 1000; // Length of the visible road
+        // Function to load all 3D assets (player and tree models)
+        async function loadAssets() {
+            const fbxLoader = new FBXLoader();
+            const gltfLoader = new GLTFLoader();
 
-            // Material for the main road lanes
-            const roadMat = new THREE.MeshBasicMaterial({ color: 0x333333 }); // Dark grey for road
-            // Material for the road shoulders (slightly different shade)
-            const shoulderMat = new THREE.MeshBasicMaterial({ color: 0x444444 });
+            const playerLoadPromise = new Promise((resolve) => {
+                fbxLoader.load('./Fast_Run.fbx', (fbx) => {
+                    player = fbx;
+                    // Initial player setup (scale, position, rotation, shadows)
+                    player.scale.set(0.01, 0.01, 0.01); // Adjust as needed for your FBX model
+                    player.position.set(lanePositions[currentLane], 0.2, 5);
+                    player.rotation.y = Math.PI; // Rotate player to face camera (if needed)
+                    player.traverse(function (object) {
+                        if (object.isMesh) object.castShadow = true;
+                    });
+                    mixer = new THREE.AnimationMixer(player);
+                    if (fbx.animations && fbx.animations.length > 0) {
+                        const action = mixer.clipAction(fbx.animations[0]);
+                        action.play();
+                    } else {
+                        console.warn('No animations found in the loaded FBX player model.');
+                    }
+                    scene.add(player);
+                    resolve();
+                }, undefined, (error) => {
+                    console.error('An error occurred loading the FBX player model:', error);
+                    createBasicPlayerPlaceholder(); // Fallback to basic player
+                    resolve(); // Resolve even on error to continue game initialization
+                });
+            });
 
-            // Create three main road lanes
-            for (let i = 0; i < 3; i++) {
-                const roadGeo = new THREE.PlaneGeometry(laneWidth, roadLength);
-                const lane = new THREE.Mesh(roadGeo, roadMat);
-                lane.rotation.x = -Math.PI / 2; // Rotate to lie flat on the XZ plane
-                // Position lanes side by side based on the new laneWidth
-                lane.position.x = -laneWidth + i * laneWidth;
-                roadGroup.add(lane);
-            }
+            const treeLoadPromise = new Promise((resolve) => {
+                // IMPORTANT: Replace './tree.glb' with the actual path to your GLB tree model.
+                gltfLoader.load('./tree.glb', (gltf) => {
+                    loadedTreeModel = gltf.scene;
+                    // Adjust base scale/position of the loaded tree model if needed
+                    // For example, if the GLB tree is huge, scale it down here.
+                    // This scale applies to the base model before cloning.
+                    loadedTreeModel.scale.set(1, 1, 1); // Default scale, adjust as necessary
+                    loadedTreeModel.traverse(function (object) {
+                        if (object.isMesh) {
+                            object.castShadow = true;
+                            object.receiveShadow = true;
+                        }
+                    });
+                    resolve();
+                }, undefined, (error) => {
+                    console.error('An error occurred loading the GLB tree model:', error);
+                    // No specific visual fallback for trees, they just won't appear
+                    resolve(); // Resolve even on error
+                });
+            });
 
-            // Calculate the x-position for the left shoulder
-            // It's to the left of the leftmost lane's center, plus half its own width
-            const leftShoulderX = -laneWidth - (laneWidth / 2) - (roadShoulderWidth / 2);
-            const shoulderLeftGeo = new THREE.PlaneGeometry(roadShoulderWidth, roadLength);
-            const shoulderLeft = new THREE.Mesh(shoulderLeftGeo, shoulderMat);
-            shoulderLeft.rotation.x = -Math.PI / 2;
-            shoulderLeft.position.x = leftShoulderX;
-            roadGroup.add(shoulderLeft);
+            // Wait for both models to load before proceeding
+            await Promise.all([playerLoadPromise, treeLoadPromise]);
 
-            // Calculate the x-position for the right shoulder
-            // It's to the right of the rightmost lane's center, plus half its own width
-            const rightShoulderX = laneWidth + (laneWidth / 2) + (roadShoulderWidth / 2);
-            const shoulderRightGeo = new THREE.PlaneGeometry(roadShoulderWidth, roadLength);
-            const shoulderRight = new THREE.Mesh(shoulderRightGeo, shoulderMat);
-            shoulderRight.rotation.x = -Math.PI / 2;
-            shoulderRight.position.x = rightShoulderX;
-            roadGroup.add(shoulderRight);
-
-
-            // Add dashed white strips between main lanes
-            const lineCount = 50; // Number of dashed lines
-            const stripLength = 4; // Length of each strip
-            const stripWidth = 0.3; // Width of each strip
-            const stripSpacing = roadLength / lineCount; // Spacing between strips
-
-            for (let i = 1; i < 3; i++) { // For the two lines between three lanes
-                for (let j = 0; j < lineCount; j++) {
-                    const lineGeo = new THREE.PlaneGeometry(stripWidth, stripLength);
-                    const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }); // White color
-                    const line = new THREE.Mesh(lineGeo, lineMat);
-                    line.rotation.x = -Math.PI / 2; // Rotate to lie flat
-                    // Position between lanes based on the new laneWidth
-                    line.position.x = -laneWidth / 2 + (i - 1) * laneWidth;
-                    line.position.z = -roadLength / 2 + j * stripSpacing; // Distribute along the road
-                    line.position.y = 0.01; // Slightly above the road to prevent Z-fighting
-                    roadGroup.add(line);
-                }
-            }
-            scene.add(roadGroup);
+            // Start the animation loop only after all models are loaded
+            renderer.setAnimationLoop(animate);
         }
 
-        // Create the player character (a simple human running figure)
-        function setupPlayer() {
-            player = new THREE.Group(); // Group to hold all player body parts
+        // Function to create a tree instance (clones the loaded GLB model)
+        function createTree() {
+            if (!loadedTreeModel) {
+                console.warn('Tree model not loaded. Cannot create tree instance.');
+                return null;
+            }
+            const treeClone = loadedTreeModel.clone();
+            // Apply random slight scaling for variety to the clone
+            const scale = 0.8 + Math.random() * 0.4; // Scale between 0.8 and 1.2
+            treeClone.scale.set(scale, scale, scale);
+            // Position the tree correctly on the ground (adjust based on your tree model's pivot)
+            // Assuming the tree model's base is at Y=0 in its original file
+            treeClone.position.y = 0; // Adjust if your tree model's origin is not at its base
+            return treeClone;
+        }
 
-            // Torso
+        // Fallback function to create a simple player if FBX model fails to load
+        function createBasicPlayerPlaceholder() {
+            player = new THREE.Group();
             const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.4), new THREE.MeshBasicMaterial({ color: 0x0077ff }));
             torso.position.y = 1.8;
             player.add(torso);
-
-            // Head
             const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), new THREE.MeshBasicMaterial({ color: 0xffcc99 }));
             head.position.y = 2.7;
             player.add(head);
-
-            // Legs
             const legGeo = new THREE.BoxGeometry(0.2, 0.8, 0.2);
-            const legMat = new THREE.MeshBasicMaterial({ color: 0x333333 }); // Dark grey for pants/legs
-
-            const legLeft = new THREE.Mesh(legGeo, legMat);
-            legLeft.position.set(-0.2, 0.4, 0);
-            legLeft.rotation.z = 0.3; // Slight rotation for running pose
-            player.add(legLeft);
-
-            const legRight = new THREE.Mesh(legGeo, legMat);
-            legRight.position.set(0.2, 0.4, 0);
-            legRight.rotation.z = -0.3; // Slight rotation for running pose
-            player.add(legRight);
-
-            // Arms
+            const legMat = new THREE.MeshBasicMaterial({ color: 0xffffff }); // White legs
+            player.legLeft = new THREE.Mesh(legGeo, legMat);
+            player.legLeft.position.set(-0.2, 0.4, 0);
+            player.add(player.legLeft);
+            player.legRight = new THREE.Mesh(legGeo, legMat);
+            player.legRight.position.set(0.2, 0.4, 0);
+            player.add(player.legRight);
             const armGeo = new THREE.BoxGeometry(0.2, 0.8, 0.2);
-            const armMat = new THREE.MeshBasicMaterial({ color: 0x555555 }); // Grey for shirt/arms
-
-            const armLeft = new THREE.Mesh(armGeo, armMat);
-            armLeft.position.set(-0.6, 2.0, 0);
-            armLeft.rotation.z = -0.4; // Slight rotation for running pose
-            player.add(armLeft);
-
-            const armRight = new THREE.Mesh(armGeo, armMat);
-            armRight.position.set(0.6, 2.0, 0);
-            armRight.rotation.z = 0.4; // Slight rotation for running pose
-            player.add(armRight);
-
-            // Player's base Y position remains slightly above the road plane for better visibility.
-            player.position.set(lanePositions[currentLane], 0.2, 5); // Initial position in the middle lane
+            const armMat = new THREE.MeshBasicMaterial({ color: 0x555555 });
+            player.armLeft = new THREE.Mesh(armGeo, armMat);
+            player.armLeft.position.set(-0.6, 2.0, 0);
+            player.add(player.armLeft);
+            player.armRight = new THREE.Mesh(armGeo, armMat);
+            player.armRight.position.set(0.6, 2.0, 0);
+            player.add(player.armRight);
+            player.position.set(lanePositions[currentLane], 0.2, 5);
             scene.add(player);
         }
 
-        // Add ambient lighting to the scene
+        // Create the road with multiple lanes and dashed lines, including shoulders
+        function setupRoad() {
+            const roadMaterial = new THREE.MeshPhongMaterial({ color: 0x333333, shininess: 10 });
+            const shoulderMaterial = new THREE.MeshPhongMaterial({ color: 0x444444, shininess: 5 });
+            const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+
+            // Clear any existing road segments before recreating (for reset)
+            roadSegments.forEach(segment => scene.remove(segment));
+            roadSegments = [];
+
+            const totalRoadLength = roadSegmentLength * roadSegmentCount;
+            // Position segments to cover the visible range, starting from far back (negative Z)
+            // and extending forward (positive Z).
+            const initialZStart = - (totalRoadLength / 2) - roadSegmentLength; // Start well behind the camera's view
+
+            for (let i = 0; i < roadSegmentCount; i++) {
+                const segmentGroup = new THREE.Group();
+                // Calculate segment Z position: initial start plus (index * segment length)
+                const segmentZ = initialZStart + (i * roadSegmentLength);
+
+                // Create three main road lanes for this segment
+                for (let j = 0; j < 3; j++) {
+                    const roadGeo = new THREE.PlaneGeometry(laneWidth, roadSegmentLength);
+                    const lane = new THREE.Mesh(roadGeo, roadMaterial);
+                    lane.rotation.x = -Math.PI / 2; // Rotate to lie flat on the XZ plane
+                    lane.position.x = -laneWidth + j * laneWidth;
+                    lane.receiveShadow = true; // Road can receive shadows
+                    segmentGroup.add(lane);
+                }
+
+                // Create road shoulders for this segment
+                const leftShoulderX = -laneWidth - (laneWidth / 2) - (roadShoulderWidth / 2);
+                const shoulderLeftGeo = new THREE.PlaneGeometry(roadShoulderWidth, roadSegmentLength);
+                const shoulderLeft = new THREE.Mesh(shoulderLeftGeo, shoulderMaterial);
+                shoulderLeft.rotation.x = -Math.PI / 2;
+                shoulderLeft.position.x = leftShoulderX;
+                shoulderLeft.receiveShadow = true;
+                segmentGroup.add(shoulderLeft);
+
+                const rightShoulderX = laneWidth + (laneWidth / 2) + (roadShoulderWidth / 2);
+                const shoulderRightGeo = new THREE.PlaneGeometry(roadShoulderWidth, roadSegmentLength);
+                const shoulderRight = new THREE.Mesh(shoulderRightGeo, shoulderMaterial);
+                shoulderRight.rotation.x = -Math.PI / 2;
+                shoulderRight.position.x = rightShoulderX;
+                shoulderRight.receiveShadow = true;
+                segmentGroup.add(shoulderRight);
+
+                // Add dashed white strips between main lanes for this segment
+                const lineCountPerSegment = roadSegmentLength / 10; // Adjust as needed for density
+                const stripLength = 4;
+                const stripWidth = 0.3;
+                const stripSpacing = roadSegmentLength / lineCountPerSegment;
+
+                for (let j = 1; j < 3; j++) { // For the two lines between three lanes
+                    for (let k = 0; k < lineCountPerSegment; k++) {
+                        const lineGeo = new THREE.PlaneGeometry(stripWidth, stripLength);
+                        const line = new THREE.Mesh(lineGeo, lineMaterial);
+                        line.rotation.x = -Math.PI / 2;
+                        line.position.x = -laneWidth / 2 + (j - 1) * laneWidth;
+                        line.position.z = - (roadSegmentLength / 2) + k * stripSpacing; // Position within segment
+                        line.position.y = 0.01; // Slightly above the road to prevent Z-fighting
+                        segmentGroup.add(line);
+                    }
+                }
+                segmentGroup.position.z = segmentZ; // Set the overall Z position of the segment group
+                scene.add(segmentGroup);
+                roadSegments.push(segmentGroup); // Store the entire segment group
+
+                // Add trees to this segment
+                const treesPerSegmentSide = Math.ceil(roadSegmentLength / treeSpacing); // Calculate based on treeSpacing
+                // treeOffsetFromShoulder: This value controls how far the trees are from the road.
+                // Smaller value = closer to road. Larger value = further from road.
+                const treeOffsetFromShoulder = -1; // Changed: Adjusted value to -1
+
+                if (loadedTreeModel) { // Only add trees if the model was loaded successfully
+                    for (let t = 0; t < treesPerSegmentSide; t++) {
+                        // Calculate Z position to ensure continuous placement
+                        const treeZ = - (roadSegmentLength / 2) + (t * treeSpacing);
+
+                        // Left side trees
+                        const treeLeft = createTree();
+                        if (treeLeft) {
+                            treeLeft.position.x = leftShoulderX - (roadShoulderWidth / 2) - treeOffsetFromShoulder;
+                            treeLeft.position.z = treeZ;
+                            segmentGroup.add(treeLeft);
+                        }
+
+                        // Right side trees
+                        const treeRight = createTree();
+                        if (treeRight) {
+                            treeRight.position.x = rightShoulderX + (roadShoulderWidth / 2) + treeOffsetFromShoulder;
+                            treeRight.position.z = treeZ;
+                            segmentGroup.add(treeRight);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Add ambient and directional lighting to the scene
         function setupLighting() {
-            const light = new THREE.AmbientLight(0xffffff, 1.0); // Soft white light from all directions
-            scene.add(light);
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x8d8d8d, 1); // Softer ambient light
+            hemiLight.position.set(0, 20, 0);
+            scene.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 2); // Brighter directional light
+            dirLight.position.set(-3, 10, -10);
+            dirLight.castShadow = true;
+            dirLight.shadow.camera.top = 5;
+            dirLight.shadow.camera.bottom = -5;
+            dirLight.shadow.camera.left = -5;
+            dirLight.shadow.camera.right = 5;
+            dirLight.shadow.camera.near = 0.1;
+            dirLight.shadow.camera.far = 50;
+            dirLight.shadow.mapSize.width = 1024; // Increase shadow map resolution
+            dirLight.shadow.mapSize.height = 1024;
+            scene.add(dirLight);
+
+            // Optional: Helper to visualize the directional light's shadow camera
+            // scene.add(new THREE.CameraHelper(dirLight.shadow.camera));
         }
 
         // Function to create an obstacle
@@ -285,6 +441,7 @@
             const ob = new THREE.Mesh(geo, mat);
             // Randomly place obstacle in one of the three lanes
             ob.position.set(lanePositions[Math.floor(Math.random() * 3)], 0.75, z);
+            ob.castShadow = true; // Obstacles cast shadows
             scene.add(ob);
             obstacles.push(ob);
         }
@@ -296,54 +453,96 @@
             const token = new THREE.Mesh(geo, mat);
             // Randomly place token in one of the three lanes
             token.position.set(lanePositions[Math.floor(Math.random() * 3)], 0.6, z);
+            token.castShadow = true; // Tokens cast shadows
             scene.add(token);
             tokens.push(token);
+        }
+
+        // Function to increase game speed over time
+        function increaseGameSpeed() {
+            if (gameSpeed < maxGameSpeed) {
+                gameSpeed = Math.min(gameSpeed + speedIncreaseRate, maxGameSpeed);
+                console.log('Game Speed Increased:', gameSpeed.toFixed(2));
+            }
         }
 
         // Game animation loop
         function animate() {
             if (isGameOver) return; // Stop animation if game is over
 
-            animationFrameId = requestAnimationFrame(animate); // Request next frame
+            // Update the animation mixer with the time elapsed since the last frame
+            const delta = clock.getDelta();
+            if (mixer) {
+                mixer.update(delta);
+            }
 
-            // Move obstacles towards the player
+            // Smoothly move player towards target lane
+            if (player && player.position.x !== targetPlayerX) {
+                player.position.x += (targetPlayerX - player.position.x) * playerMoveSpeed;
+                // Snap to target if very close to avoid floating point inaccuracies
+                if (Math.abs(targetPlayerX - player.position.x) < 0.05) {
+                    player.position.x = targetPlayerX;
+                }
+            }
+
+            // Move road segments
+            const totalRoadLength = roadSegmentLength * roadSegmentCount;
+            roadSegments.forEach(segment => {
+                segment.position.z += gameSpeed; // gameSpeed is positive, so Z increases
+
+                // If segment has moved completely past the camera's view (its front edge is behind the camera)
+                // Move it back to the beginning of the road chain
+                if (segment.position.z > camera.position.z + roadSegmentLength) { // Check if segment is fully past the camera's view
+                    segment.position.z -= totalRoadLength; // Move it to the very back of the road chain
+                }
+            });
+
+            // Move obstacles towards the player (they move with the road)
             obstacles.forEach((o, i) => {
-                o.position.z += gameSpeed; // Move along Z-axis
-                // Check if obstacle has passed the camera (missed)
-                if (o.position.z > camera.position.z) {
+                o.position.z += gameSpeed; // Move along Z-axis (Z increases, moving towards player)
+                o.rotation.y += 0.05; // Make obstacles "dance" by rotating them
+
+                // Check if obstacle has passed the camera (despawn)
+                if (o.position.z > camera.position.z + 20) { // If it's too far in front of the camera (passed player)
                     scene.remove(o); // Remove from scene
                     obstacles.splice(i, 1); // Remove from array
                 }
                 // Check for collision with player
                 // Using a simple bounding box collision check
-                const playerBox = new THREE.Box3().setFromObject(player);
-                const obstacleBox = new THREE.Box3().setFromObject(o);
-                if (playerBox.intersectsBox(obstacleBox)) {
-                    karma.bad++; // Increment bad karma for collision
-                    updateScoreboard();
-                    scene.remove(o);
-                    obstacles.splice(i, 1);
-                    // Optionally, add a visual/audio feedback for collision
+                // Ensure player exists before checking collision
+                if (player) {
+                    const playerBox = new THREE.Box3().setFromObject(player);
+                    const obstacleBox = new THREE.Box3().setFromObject(o);
+                    if (playerBox.intersectsBox(obstacleBox)) {
+                        karma.bad++; // Increment bad karma for collision
+                        updateScoreboard();
+                        scene.remove(o);
+                        obstacles.splice(i, 1);
+                        // Optionally, add a visual/audio feedback for collision
+                    }
                 }
             });
 
-            // Move tokens towards the player
+            // Move tokens towards the player (they move with the road)
             tokens.forEach((t, i) => {
-                t.position.z += gameSpeed; // Move along Z-axis
-                // Check if token has passed the camera (missed)
-                if (t.position.z > camera.position.z) {
+                t.position.z += gameSpeed; // Move along Z-axis (Z increases, moving towards player)
+                // Check if token has passed the camera (despawn)
+                if (t.position.z > camera.position.z + 20) { // If it's too far in front of the camera (passed player)
                     scene.remove(t);
                     tokens.splice(i, 1);
                 }
                 // Check for collection by player
-                const playerBox = new THREE.Box3().setFromObject(player);
-                const tokenBox = new THREE.Box3().setFromObject(t);
-                if (playerBox.intersectsBox(tokenBox)) {
-                    karma.good++; // Increment good karma for collecting token
-                    updateScoreboard();
-                    scene.remove(t);
-                    tokens.splice(i, 1);
-                    // Optionally, add a visual/audio feedback for collection
+                // Ensure player exists before checking collection
+                if (player) {
+                    const playerBox = new THREE.Box3().setFromObject(player);
+                    const tokenBox = new THREE.Box3().setFromObject(t);
+                    if (playerBox.intersectsBox(tokenBox)) {
+                        karma.good++; // Increment good karma for collecting token
+                        updateScoreboard();
+                        scene.remove(t);
+                        tokens.splice(i, 1);
+                        // Optionally, add a visual/audio feedback for collection
+                    }
                 }
             });
 
@@ -382,6 +581,7 @@
             cancelAnimationFrame(animationFrameId); // Stop the animation loop
             clearInterval(obstacleSpawnInterval); // Stop spawning obstacles
             clearInterval(tokenSpawnInterval); // Stop spawning tokens
+            clearInterval(speedIntervalId); // Stop speed increase
             showMessageBox(message);
         }
 
@@ -397,19 +597,37 @@
             updateScoreboard(); // Update scoreboard display
 
             currentLane = 1; // Reset player to middle lane
-            player.position.x = lanePositions[currentLane]; // Update player position
+            // Ensure player exists before setting position
+            if (player) {
+                player.position.x = lanePositions[currentLane]; // Update player position
+                targetPlayerX = lanePositions[currentLane]; // Reset target player X
+            }
 
-            gameSpeed = 0.2; // Reset game speed
+            gameSpeed = 0.2; // Reset game speed to initial positive value
 
             isGameOver = false; // Reset game over flag
             hideMessageBox(); // Hide any message box
 
-            // Restart spawning intervals
+            // Reset animation mixer if it exists
+            if (mixer) {
+                mixer.stopAllAction();
+                // If the Mixamo model has animations, restart the first one on reset
+                if (player && player.animations && player.animations.length > 0) {
+                    const action = mixer.clipAction(player.animations[0]);
+                    action.play();
+                }
+            }
+            clock = new THREE.Clock(); // Reset clock for consistent timing
+
+            // Re-setup road segments to ensure they are in initial positions
+            setupRoad();
+
+            // Restart spawning intervals and speed increase
             startSpawning();
 
             // Restart animation loop if it was stopped
             if (!animationFrameId || isGameOver) {
-                animate();
+                renderer.setAnimationLoop(animate);
             }
         }
 
@@ -421,49 +639,56 @@
             // Clear any existing intervals to prevent duplicates on reset
             if (obstacleSpawnInterval) clearInterval(obstacleSpawnInterval);
             if (tokenSpawnInterval) clearInterval(tokenSpawnInterval);
+            if (speedIntervalId) clearInterval(speedIntervalId); // Clear existing speed interval
 
             // Spawn obstacles every 2 seconds
+            // Obstacles spawn at a fixed Z relative to the world origin, far behind the player
             obstacleSpawnInterval = setInterval(() => {
-                if (!isGameOver) createObstacle(-100);
+                if (!isGameOver) createObstacle(camera.position.z - 100);
             }, 2000);
 
             // Spawn tokens every 3 seconds
+            // Tokens spawn at a fixed Z relative to the world origin, far behind the player
             tokenSpawnInterval = setInterval(() => {
-                if (!isGameOver) createToken(-100);
+                if (!isGameOver) createToken(camera.position.z - 100);
             }, 3000);
+
+            // Start speed increase interval
+            speedIntervalId = setInterval(increaseGameSpeed, speedIncreaseIntervalTime);
         }
 
         // Key controls for player movement
         window.addEventListener('keydown', (e) => {
-            if (isGameOver) return; // Disable controls if game is over
+            if (isGameOver || !player) return; // Disable controls if game is over or player not loaded
 
             if (e.code === 'ArrowLeft' && currentLane > 0) {
                 currentLane--;
-                player.position.x = lanePositions[currentLane];
+                targetPlayerX = lanePositions[currentLane]; // Update target X
             } else if (e.code === 'ArrowRight' && currentLane < 2) {
                 currentLane++;
-                player.position.x = lanePositions[currentLane];
+                targetPlayerX = lanePositions[currentLane]; // Update target X
             }
         });
 
         // Touch controls for player movement (swipe left/right)
         let touchStartX = 0;
         window.addEventListener('touchstart', (e) => {
-            if (isGameOver) return;
+            if (isGameOver || !player) return;
             touchStartX = e.touches[0].clientX;
         });
 
         window.addEventListener('touchend', (e) => {
-            if (isGameOver) return;
+            if (isGameOver || !player) return;
+            // Corrected to get clientX directly from the first touch in changedTouches
             const touchEndX = e.changedTouches[0].clientX;
             const swipeThreshold = 50; // Minimum distance for a swipe
 
             if (touchEndX < touchStartX - swipeThreshold && currentLane > 0) {
                 currentLane--;
-                player.position.x = lanePositions[currentLane];
+                targetPlayerX = lanePositions[currentLane]; // Update target X
             } else if (touchEndX > touchStartX + swipeThreshold && currentLane < 2) {
                 currentLane++;
-                player.position.x = lanePositions[currentLane];
+                targetPlayerX = lanePositions[currentLane]; // Update target X
             }
         });
 
@@ -474,9 +699,8 @@
         window.onload = function () {
             init(); // Setup scene, camera, renderer, and initial elements
             startSpawning(); // Start spawning obstacles and tokens
-            animate(); // Start the animation loop
+            // The animate loop will be started after the models are loaded in loadAssets()
         };
     </script>
 </body>
 </html>
-
