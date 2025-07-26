@@ -135,9 +135,9 @@
         let obstacles = []; // Array to store active obstacles
         let tokens = []; // Array to store active tokens
         let gameSpeed = 0.2; // Initial speed of objects moving towards the player (now positive for world movement)
-        const maxGameSpeed = 1.0; // Maximum game speed
-        const speedIncreaseRate = 0.01; // How much speed increases per interval
-        const speedIncreaseIntervalTime = 5000; // Increase speed every 5 seconds
+        const maxGameSpeed = 4.0; // Maximum game speed
+        const speedIncreaseRate = 0.07; // How much speed increases per interval
+        const speedIncreaseIntervalTime = 1000; // Increase speed every 5 seconds
         let animationFrameId; // To store the ID of the requestAnimationFrame
         let isGameOver = false; // Flag to control game state
 
@@ -213,7 +213,7 @@
             const gltfLoader = new GLTFLoader();
 
             const playerLoadPromise = new Promise((resolve) => {
-                fbxLoader.load('./Fast_Run.fbx', (fbx) => {
+                fbxLoader.load('./Fast_Run_Boy.fbx', (fbx) => {
                     player = fbx;
                     // Initial player setup (scale, position, rotation, shadows)
                     player.scale.set(0.01, 0.01, 0.01); // Adjust as needed for your FBX model
