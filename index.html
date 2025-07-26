@@ -31,7 +31,7 @@
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
             z-index: 10;
             border: 2px solid #ccc;
-            display: flex;
+            display: flex; /* Initially hidden, shown by JS */
             gap: 30px;
             align-items: center;
         }
@@ -79,11 +79,142 @@
             background-color: #0056b3;
             transform: translateY(-2px);
         }
+        /* Styles for game controls */
+        #game-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex; /* Initially hidden, shown by JS */
+            gap: 20px;
+            z-index: 10;
+        }
+        #game-controls button {
+            background-color: #28a745; /* Green for pause/resume */
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        #game-controls button:hover {
+            background-color: #218838;
+            transform: translateY(-2px);
+        }
+        #game-controls button#restart-button-main { /* Specific style for the main restart button */
+            background-color: #dc3545; /* Red for restart */
+        }
+        #game-controls button#restart-button-main:hover {
+            background-color: #c82333;
+        }
+
+        /* Styles for the start form */
+        #start-form-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85); /* Dark overlay */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 200; /* Above everything else */
+            color: white;
+            flex-direction: column;
+            font-size: 20px;
+        }
+        #start-form {
+            background: #333;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 90%;
+            max-width: 400px;
+        }
+        #start-form label {
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #eee;
+        }
+        #start-form input[type="text"],
+        #start-form select {
+            width: calc(100% - 20px);
+            padding: 12px 10px;
+            border: 1px solid #555;
+            border-radius: 8px;
+            background-color: #444;
+            color: white;
+            font-size: 18px;
+            box-sizing: border-box; /* Include padding in width */
+        }
+        #start-form input[type="text"]::placeholder {
+            color: #bbb;
+        }
+        #start-form button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 20px;
+            font-weight: bold;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            margin-top: 10px;
+        }
+        #start-form button:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        /* Styles for Player Name Display */
+        #player-name-display {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            border-radius: 15px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+            border: 2px solid #ccc;
+            display: none; /* Hidden by default, shown by JS */
+        }
     </style>
 </head>
 <body>
+    <!-- Start Form Container -->
+    <div id="start-form-container">
+        <form id="start-form">
+            <h2>Enter Your Details</h2>
+            <div>
+                <label for="playerName">Name:</label>
+                <input type="text" id="playerName" placeholder="Your Name" required>
+            </div>
+            <div>
+                <label for="playerGender">Gender:</label>
+                <select id="playerGender" required>
+                    <option value="male" selected>Male</option> <!-- Default selected -->
+                    <option value="female">Female</option>
+                </select>
+            </div>
+            <button type="submit" id="start-game-button">Start Game</button>
+        </form>
+    </div>
+
     <!-- Scoreboard with enhanced styling and icons -->
-    <div id="scoreboard">
+    <div id="scoreboard" style="display: none;">
         <div class="karma-score">
             <span class="karma-icon good-karma-icon">😊</span>
             Good Karma: <span id="good-karma-value">0</span>
@@ -94,10 +225,22 @@
         </div>
     </div>
 
+    <!-- Player Name Display -->
+    <div id="player-name-display" style="display: none;">
+        Welcome, <span id="current-player-name"></span>
+    </div>
+
     <!-- Message box for game over/instructions -->
     <div id="message-box">
         <p id="message-text"></p>
         <button id="restart-button">Restart Game</button>
+    </div>
+
+    <!-- Game Controls -->
+    <div id="game-controls" style="display: none;">
+        <button id="pause-button">Pause</button>
+        <button id="restart-button-main">Restart Game</button>
+        <button id="change-player-button">Change Player</button>
     </div>
 
     <!-- Import Map for Three.js modules -->
@@ -115,6 +258,8 @@
         import * as THREE from 'three';
         import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+        import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
         // Global variables for Three.js scene, camera, and renderer
         let scene, camera, renderer;
@@ -135,11 +280,13 @@
         let obstacles = []; // Array to store active obstacles
         let tokens = []; // Array to store active tokens
         let gameSpeed = 0.2; // Initial speed of objects moving towards the player (now positive for world movement)
+        const initialGameSpeed = 0.2; // Initial game speed for scaling difficulty
         const maxGameSpeed = 4.0; // Maximum game speed
-        const speedIncreaseRate = 0.07; // How much speed increases per interval
-        const speedIncreaseIntervalTime = 1000; // Increase speed every 5 seconds
+        const speedIncreaseRate = 0.01; // How much speed increases per interval
+        const speedIncreaseIntervalTime = 10000; // Increase speed every 5 seconds
         let animationFrameId; // To store the ID of the requestAnimationFrame
         let isGameOver = false; // Flag to control game state
+        let isPaused = false; // Flag to control pause state
 
         // Road movement variables
         let roadSegments = []; // Array to store individual road segments for continuous movement
@@ -155,8 +302,81 @@
         const playerMoveSpeed = 0.1; // Controls the smoothness of lane changes (0.1 is a good starting point)
         let speedIntervalId; // Interval ID for speed increase
 
+        // Difficulty increase variables for obstacles/tokens (distance-based)
+        let lastObstacleZ = 0; // Z position of the last spawned obstacle
+        let currentObstacleSpawnDistance = 15; // Initial distance between obstacles (Adjusted to be closer)
+        const initialObstacleSpawnDistance = 15; // (Adjusted to be closer)
+        const minObstacleSpawnDistance = 5; // Minimum distance between obstacles (Adjusted to be closer)
+        const obstacleDistanceDecreaseRate = 1; // Decrease distance by this amount (Adjusted for smoother curve)
+
+        let lastTokenZ = 0; // Z position of the last spawned token
+        let currentTokenSpawnDistance = 12; // Initial distance between tokens (Adjusted to be closer)
+        const initialTokenSpawnDistance = 12; // (Adjusted to be closer)
+        const minTokenSpawnDistance = 4; // Minimum distance between tokens (Adjusted to be closer)
+        const tokenDistanceDecreaseRate = 1; // Decrease distance by this amount (Adjusted for smoother curve)
+
+        const distanceDecreaseIntervalTime = 5000; // Decrease spawn distances every 5 seconds (Adjusted for faster difficulty)
+        let difficultyIntervalId; // Interval ID for difficulty increase
+
+        let pauseButton; // Reference to the pause button
+        let changePlayerButton; // Reference to the change player button
+
+        // Variables for time-based spawning proportional to speed
+        let lastObstacleSpawnTime = 0;
+        let lastTokenSpawnTime = 0;
+        const baseObstacleSpawnTime = 2000; // Base milliseconds between obstacle spawns
+        const baseTokenSpawnTime = 3000; // Base milliseconds between token spawns
+
+        // References to form elements
+        let startFormContainer;
+        let startForm;
+        let playerNameInput;
+        let playerGenderSelect;
+        let playerNameDisplay; // Reference to player name display div
+        let currentPlayersName; // Reference to span for current player name
+
+        // Global font variable for 3D text
+        let font = null;
+
+        // Karma lists
+        const goodKarmas = [
+            { english: "Truthfulness", hindi: "सत्यता" },
+            { english: "Gratitude", hindi: "कृतज्ञता" },
+            { english: "Respect", hindi: "सम्मान" },
+            { english: "Integrity", hindi: "ईमानदारी" },
+            { english: "Guidance", hindi: "मार्गदर्शन" },
+            { english: "Compassion", hindi: "करुणा" },
+            { english: "Forgiveness", hindi: "क्षमा" },
+            { english: "Self-control", hindi: "आत्म-नियंत्रण" },
+            { english: "Spirituality", hindi: "आध्यात्मिकता" },
+            { english: "Charity", hindi: "दान" },
+            { english: "Discipline", hindi: "अनुशासन" },
+            { english: "Support", hindi: "प्रोत्साहन" },
+            { english: "Simplicity", hindi: "सादगी" },
+            { english: "Ahimsa", hindi: "अहिंसा" }
+        ];
+
+        const badKarmas = [
+            { english: "Violence", hindi: "हिंसा" },
+            { english: "Deceit", hindi: "धोखा" },
+            { english: "Theft", hindi: "चोरी" },
+            { english: "Disrespect", hindi: "अपमान" },
+            { english: "Slander", hindi: "निंदा" },
+            { english: "Greed", hindi: "लोभ" },
+            { english: "Exploitation", hindi: "शोषण" },
+            { english: "Cruelty", hindi: "क्रूरता" },
+            { english: "Addiction", hindi: "व्यसन" },
+            { english: "Malice", hindi: "द्वेष" },
+            { english: "Wastefulness", hindi: "अपव्यय" },
+            { english: "Ego", hindi: "अहंकार" },
+            { english: "Treachery", hindi: "विश्वासघात" },
+            { english: "Instigation", hindi: "भड़काना" },
+            { english: "Sloth", hindi: "आलस्य" }
+        ];
+
+
         // Initialize the Three.js scene, camera, and renderer
-        async function init() { // Made init async to await model loading
+        async function init() {
             // Scene setup
             scene = new THREE.Scene();
             // Set a background color for the scene (light blue for sky)
@@ -164,61 +384,81 @@
             scene.fog = new THREE.Fog(0x87ceeb, 50, 200); // Add fog for depth perception
 
             // Camera setup (PerspectiveCamera for 3D view)
-            // FOV, Aspect Ratio, Near Clipping Plane, Far Clipping Plane
-            // Increased FOV to ensure player is visible in all lanes.
             camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
-            // Position the camera to look down the road
             camera.position.set(0, 5, 12);
-            camera.lookAt(0, 1.5, 5); // Point camera towards the player and road
+            camera.lookAt(0, 1.5, 5);
 
             // Initialize clock for animation updates
             clock = new THREE.Clock();
 
             // Renderer setup (WebGLRenderer for rendering 3D graphics)
-            renderer = new THREE.WebGLRenderer({ antialias: true }); // Enable anti-aliasing for smoother edges
-            renderer.setPixelRatio(window.devicePixelRatio); // Set pixel ratio for high-res displays
-            renderer.setSize(window.innerWidth, window.innerHeight); // Set renderer size to full window
-            renderer.shadowMap.enabled = true; // Enable shadows
-            document.body.appendChild(renderer.domElement); // Add renderer's canvas to the DOM
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
 
             // Get scoreboard elements
             scoreboard = document.getElementById("scoreboard");
             goodKarmaValue = document.getElementById("good-karma-value");
             badKarmaValue = document.getElementById("bad-karma-value");
 
+            // Get references to control buttons
+            pauseButton = document.getElementById('pause-button');
+            const mainRestartButton = document.getElementById('restart-button-main');
+            changePlayerButton = document.getElementById('change-player-button');
+
+            // Get references to form elements
+            startFormContainer = document.getElementById('start-form-container');
+            startForm = document.getElementById('start-form');
+            playerNameInput = document.getElementById('playerName');
+            playerGenderSelect = document.getElementById('playerGender');
+            playerNameDisplay = document.getElementById('player-name-display');
+            currentPlayersName = document.getElementById('current-player-name');
+
+
             // Add event listener for window resizing to make the game responsive
             window.addEventListener('resize', onWindowResize, false);
 
-            // Load all necessary 3D assets
+            // Load tree model and font in the background while form is displayed
             await loadAssets();
 
-            // Setup initial game elements (now that models are loaded)
-            setupRoad(); // Now creates moving road segments and trees
-            setupLighting();
+            // Add event listener for form submission
+            startForm.addEventListener('submit', async (e) => {
+                e.preventDefault(); // Prevent default form submission
+                await startGame();
+            });
 
-            resetGame(); // Call reset game to initialize karma and clear objects
-            // The animation loop will be started after the models are loaded in loadAssets()
+            // Add event listeners for game control buttons
+            pauseButton.addEventListener('click', togglePause);
+            mainRestartButton.addEventListener('click', resetGame);
+            document.getElementById('restart-button').addEventListener('click', resetGame);
+            changePlayerButton.addEventListener('click', showPlayerSelectionFormAndResetGame);
         }
 
-        // Function to handle window resizing
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        // Function to load all 3D assets (player and tree models)
-        async function loadAssets() {
+        // Function to load the player model based on gender
+        async function loadPlayerModel(modelPath) {
             const fbxLoader = new FBXLoader();
-            const gltfLoader = new GLTFLoader();
+            return new Promise((resolve, reject) => {
+                fbxLoader.load(modelPath, (fbx) => {
+                    // Remove existing player if any (e.g., from a previous game session or placeholder)
+                    if (player) {
+                        scene.remove(player);
+                        player.traverse(object => {
+                            if (object.geometry) object.geometry.dispose();
+                            if (object.material) object.material.dispose();
+                        });
+                    }
 
-            const playerLoadPromise = new Promise((resolve) => {
-                fbxLoader.load('./Fast_Run_Boy.fbx', (fbx) => {
                     player = fbx;
-                    // Initial player setup (scale, position, rotation, shadows)
-                    player.scale.set(0.01, 0.01, 0.01); // Adjust as needed for your FBX model
+                    // Adjust scale based on the model path
+                    if (modelPath === './Fast_Run_Girl.fbx') {
+                        player.scale.set(0.015, 0.015, 0.015); // Made girl model bigger
+                    } else {
+                        player.scale.set(0.01, 0.01, 0.01); // Default size for the boy model (as it is)
+                    }
                     player.position.set(lanePositions[currentLane], 0.2, 5);
-                    player.rotation.y = Math.PI; // Rotate player to face camera (if needed)
+                    player.rotation.y = Math.PI;
                     player.traverse(function (object) {
                         if (object.isMesh) object.castShadow = true;
                     });
@@ -237,15 +477,76 @@
                     resolve(); // Resolve even on error to continue game initialization
                 });
             });
+        }
+
+
+        // Function to start the game after form submission
+        async function startGame() {
+            // Hide the start form
+            startFormContainer.style.display = 'none';
+            // Show scoreboard and game controls
+            scoreboard.style.display = 'flex';
+            document.getElementById('game-controls').style.display = 'flex';
+            playerNameDisplay.style.display = 'block';
+
+            // Get player details
+            const name = playerNameInput.value;
+            const gender = playerGenderSelect.value;
+            console.log(`Player Name: ${name}, Gender: ${gender}`);
+            currentPlayersName.innerText = name;
+
+            // Determine player model path based on gender
+            const playerModelPath = (gender === 'female') ? './Fast_Run_Girl.fbx' : './Fast_Run_Boy.fbx';
+
+            // Load the correct player model
+            await loadPlayerModel(playerModelPath);
+
+            // Setup initial game elements
+            setupRoad();
+            setupLighting();
+            resetGame(); // This will also start spawning intervals and animation loop
+
+            // Start the animation loop
+            renderer.setAnimationLoop(animate);
+        }
+
+        // Function to show the player selection form and reset the game
+        function showPlayerSelectionFormAndResetGame() {
+            // Hide game elements
+            scoreboard.style.display = 'none';
+            document.getElementById('game-controls').style.display = 'none';
+            playerNameDisplay.style.display = 'none';
+
+            // Show the start form
+            startFormContainer.style.display = 'flex';
+
+            // Stop the current game animation and clear intervals
+            renderer.setAnimationLoop(null);
+            clearInterval(speedIntervalId);
+            clearInterval(difficultyIntervalId);
+
+            // Reset game state without immediately starting the animation loop
+            // The animation loop will restart when the form is submitted again via startGame()
+            resetGame(false); // Pass false to indicate not to restart animation loop immediately
+        }
+
+
+        // Function to handle window resizing
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Function to load all 3D assets (tree model and font)
+        async function loadAssets() {
+            const gltfLoader = new GLTFLoader();
+            const fontLoader = new FontLoader();
 
             const treeLoadPromise = new Promise((resolve) => {
-                // IMPORTANT: Replace './tree.glb' with the actual path to your GLB tree model.
                 gltfLoader.load('./tree.glb', (gltf) => {
                     loadedTreeModel = gltf.scene;
-                    // Adjust base scale/position of the loaded tree model if needed
-                    // For example, if the GLB tree is huge, scale it down here.
-                    // This scale applies to the base model before cloning.
-                    loadedTreeModel.scale.set(1, 1, 1); // Default scale, adjust as necessary
+                    loadedTreeModel.scale.set(1, 1, 1);
                     loadedTreeModel.traverse(function (object) {
                         if (object.isMesh) {
                             object.castShadow = true;
@@ -255,16 +556,29 @@
                     resolve();
                 }, undefined, (error) => {
                     console.error('An error occurred loading the GLB tree model:', error);
-                    // No specific visual fallback for trees, they just won't appear
                     resolve(); // Resolve even on error
                 });
             });
 
-            // Wait for both models to load before proceeding
-            await Promise.all([playerLoadPromise, treeLoadPromise]);
+            // Load the font
+            const fontLoadPromise = new Promise((resolve, reject) => {
+                // IMPORTANT: The file at this path MUST be a valid Three.js typeface.json file,
+                // generated by a dedicated Three.js font converter (e.g., https://gero3.github.io/facetype.js/).
+                // A generic JSON file or a font file simply renamed to .json will not work.
+                fontLoader.load('/fonts/Poppins_Medium_Regular.json', (loadedFont) => {
+                    font = loadedFont;
+                    console.log('Font loaded successfully.');
+                    resolve();
+                }, undefined, (error) => {
+                    console.error('An error occurred loading the font:', error);
+                    // Crucially, if the font fails to load or is invalid, 'font' remains null.
+                    // The game will then use fallback shapes instead of crashing.
+                    resolve();
+                });
+            });
 
-            // Start the animation loop only after all models are loaded
-            renderer.setAnimationLoop(animate);
+            // Wait for both tree model and font to load
+            await Promise.all([treeLoadPromise, fontLoadPromise]);
         }
 
         // Function to create a tree instance (clones the loaded GLB model)
@@ -285,6 +599,15 @@
 
         // Fallback function to create a simple player if FBX model fails to load
         function createBasicPlayerPlaceholder() {
+            // Remove existing player if it was added (e.g., previous failed load)
+            if (player) {
+                scene.remove(player);
+                player.traverse(object => {
+                    if (object.geometry) object.geometry.dispose();
+                    if (object.material) object.material.dispose();
+                });
+            }
+
             player = new THREE.Group();
             const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.4), new THREE.MeshBasicMaterial({ color: 0x0077ff }));
             torso.position.y = 1.8;
@@ -311,6 +634,7 @@
             player.position.set(lanePositions[currentLane], 0.2, 5);
             scene.add(player);
         }
+
 
         // Create the road with multiple lanes and dashed lines, including shoulders
         function setupRoad() {
@@ -371,7 +695,6 @@
                         const line = new THREE.Mesh(lineGeo, lineMaterial);
                         line.rotation.x = -Math.PI / 2;
                         line.position.x = -laneWidth / 2 + (j - 1) * laneWidth;
-                        line.position.z = - (roadSegmentLength / 2) + k * stripSpacing; // Position within segment
                         line.position.y = 0.01; // Slightly above the road to prevent Z-fighting
                         segmentGroup.add(line);
                     }
@@ -384,7 +707,7 @@
                 const treesPerSegmentSide = Math.ceil(roadSegmentLength / treeSpacing); // Calculate based on treeSpacing
                 // treeOffsetFromShoulder: This value controls how far the trees are from the road.
                 // Smaller value = closer to road. Larger value = further from road.
-                const treeOffsetFromShoulder = -1; // Changed: Adjusted value to -1
+                const treeOffsetFromShoulder = -1;
 
                 if (loadedTreeModel) { // Only add trees if the model was loaded successfully
                     for (let t = 0; t < treesPerSegmentSide; t++) {
@@ -434,28 +757,124 @@
             // scene.add(new THREE.CameraHelper(dirLight.shadow.camera));
         }
 
-        // Function to create an obstacle
+        // Function to create an obstacle (now 3D text for bad karma)
         function createObstacle(z) {
-            const geo = new THREE.BoxGeometry(1.5, 1.5, 1.5); // Larger obstacle
-            const mat = new THREE.MeshPhongMaterial({ color: 0xff4444, flatShading: true }); // Red, non-shiny
-            const ob = new THREE.Mesh(geo, mat);
-            // Randomly place obstacle in one of the three lanes
-            ob.position.set(lanePositions[Math.floor(Math.random() * 3)], 0.75, z);
-            ob.castShadow = true; // Obstacles cast shadows
-            scene.add(ob);
-            obstacles.push(ob);
+            let obstacleGroup = new THREE.Group(); // Group to hold both English and Hindi text
+            const badKarma = badKarmas[Math.floor(Math.random() * badKarmas.length)];
+            // Unified color for all karma words
+            const material = new THREE.MeshPhongMaterial({ color: 0xFFFFFF, flatShading: true }); // Light grey/off-white color
+
+            if (!font) {
+                console.warn("Font not loaded for obstacle text or is invalid. Using fallback box.");
+                const geo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+                const ob = new THREE.Mesh(geo, material);
+                obstacleGroup.add(ob); // Add fallback to group
+            } else {
+                try {
+                    // English text
+                    const englishTextGeo = new TextGeometry(badKarma.english, {
+                        font: font,
+                        size: 1.0, // Adjusted text size
+                        height: 0.3, // Adjusted text depth
+                        curveSegments: 12
+                    });
+                    englishTextGeo.computeBoundingBox();
+                    englishTextGeo.center();
+                    const englishTextMesh = new THREE.Mesh(englishTextGeo, material);
+                    obstacleGroup.add(englishTextMesh);
+
+                    // Hindi text, positioned below English text
+                    const hindiTextGeo = new TextGeometry(badKarma.hindi, {
+                        font: font,
+                        size: 0.7, // Smaller size for Hindi
+                        height: 0.2,
+                        curveSegments: 12
+                    });
+                    hindiTextGeo.computeBoundingBox();
+                    hindiTextGeo.center();
+                    const hindiTextMesh = new THREE.Mesh(hindiTextGeo, material);
+
+                    // Calculate vertical offset for Hindi text
+                    const englishTextHeight = englishTextGeo.boundingBox.max.y - englishTextGeo.boundingBox.min.y;
+                    const hindiTextHeight = hindiTextGeo.boundingBox.max.y - hindiTextGeo.boundingBox.min.y;
+                    // Position Hindi text below English text with a small gap
+                    hindiTextMesh.position.y = englishTextMesh.position.y - (englishTextHeight / 2) - (hindiTextHeight / 2) - 0.2;
+
+                    obstacleGroup.add(hindiTextMesh);
+                } catch (e) {
+                    console.error("Error creating 3D text for obstacle (font issue):", e);
+                    console.warn("Falling back to basic box for obstacle due to font error.");
+                    const geo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+                    const ob = new THREE.Mesh(geo, material);
+                    obstacleGroup.add(ob); // Add fallback to group
+                }
+            }
+
+            // Position the entire group
+            obstacleGroup.position.set(lanePositions[Math.floor(Math.random() * 3)], 2.5, z);
+            obstacleGroup.castShadow = true;
+            scene.add(obstacleGroup);
+            obstacles.push(obstacleGroup);
         }
 
-        // Function to create a token (good karma item)
+        // Function to create a token (now 3D text for good karma)
         function createToken(z) {
-            const geo = new THREE.SphereGeometry(0.6, 24, 24); // Slightly larger, smoother sphere
-            const mat = new THREE.MeshPhongMaterial({ color: 0xffdd00, flatShading: true }); // Yellow/gold
-            const token = new THREE.Mesh(geo, mat);
-            // Randomly place token in one of the three lanes
-            token.position.set(lanePositions[Math.floor(Math.random() * 3)], 0.6, z);
-            token.castShadow = true; // Tokens cast shadows
-            scene.add(token);
-            tokens.push(token);
+            let tokenGroup = new THREE.Group(); // Group to hold both English and Hindi text
+            const goodKarma = goodKarmas[Math.floor(Math.random() * goodKarmas.length)];
+            // Unified color for all karma words
+            const material = new THREE.MeshPhongMaterial({ color: 0xFFFFFF, flatShading: true }); // Light grey/off-white color
+
+            if (!font) {
+                console.warn("Font not loaded for token text or is invalid. Using fallback sphere.");
+                const geo = new THREE.SphereGeometry(0.6, 24, 24);
+                const token = new THREE.Mesh(geo, material);
+                tokenGroup.add(token); // Add fallback to group
+            } else {
+                try {
+                    // English text
+                    const englishTextGeo = new TextGeometry(goodKarma.english, {
+                        font: font,
+                        size: 0.8, // Adjusted text size
+                        height: 0.2, // Adjusted text depth
+                        curveSegments: 12
+                    });
+                    englishTextGeo.computeBoundingBox();
+                    englishTextGeo.center();
+                    const englishTextMesh = new THREE.Mesh(englishTextGeo, material);
+                    tokenGroup.add(englishTextMesh);
+
+                    // Hindi text, positioned below English text
+                    const hindiTextGeo = new TextGeometry(goodKarma.hindi, {
+                        font: font,
+                        size: 0.5, // Smaller size for Hindi
+                        height: 0.15,
+                        curveSegments: 12
+                    });
+                    hindiTextGeo.computeBoundingBox();
+                    hindiTextGeo.center();
+                    const hindiTextMesh = new THREE.Mesh(hindiTextGeo, material);
+
+                    // Calculate vertical offset for Hindi text
+                    const englishTextHeight = englishTextGeo.boundingBox.max.y - englishTextGeo.boundingBox.min.y;
+                    const hindiTextHeight = hindiTextGeo.boundingBox.max.y - hindiTextGeo.boundingBox.min.y;
+                    // Position Hindi text below English text with a small gap
+                    hindiTextMesh.position.y = englishTextMesh.position.y - (englishTextHeight / 2) - (hindiTextHeight / 2) - 0.15;
+
+                    tokenGroup.add(hindiTextMesh);
+                } catch (e) {
+                    console.error("Error creating 3D text for token (font issue):", e);
+                    console.warn("Falling back to basic sphere for token due to font error.");
+                    const geo = new THREE.SphereGeometry(0.6, 24, 24);
+                    const token = new THREE.Mesh(geo, material);
+                    tokenGroup.add(token); // Add fallback to group
+                }
+            }
+
+            // Position the entire group
+            tokenGroup.position.set(lanePositions[Math.floor(Math.random() * 3)], 2.5, z);
+            tokenGroup.castShadow = true;
+            scene.add(tokenGroup);
+            tokens.push(tokenGroup);
         }
 
         // Function to increase game speed over time
@@ -466,9 +885,43 @@
             }
         }
 
+        // Function to decrease spawn distances (increase difficulty)
+        function decreaseSpawnDistances() {
+            // Decrease obstacle spawn distance
+            if (currentObstacleSpawnDistance > minObstacleSpawnDistance) {
+                currentObstacleSpawnDistance = Math.max(currentObstacleSpawnDistance - obstacleDistanceDecreaseRate, minObstacleSpawnDistance);
+                console.log('Obstacle Spawn Distance:', currentObstacleSpawnDistance);
+            }
+
+            // Decrease token spawn distance
+            if (currentTokenSpawnDistance > minTokenSpawnDistance) {
+                currentTokenSpawnDistance = Math.max(currentTokenSpawnDistance - tokenDistanceDecreaseRate, minTokenSpawnDistance);
+                console.log('Token Spawn Distance:', currentTokenSpawnDistance);
+            }
+        }
+
+        // Function to toggle game pause state
+        function togglePause() {
+            isPaused = !isPaused; // Toggle the pause flag
+            if (isPaused) {
+                // Game is paused: Stop animation and clear intervals
+                pauseButton.innerText = 'Resume';
+                renderer.setAnimationLoop(null); // Stop requestAnimationFrame
+                clearInterval(speedIntervalId);
+                clearInterval(difficultyIntervalId);
+            } else {
+                // Game is resumed: Restart animation and intervals
+                pauseButton.innerText = 'Pause';
+                renderer.setAnimationLoop(animate); // Restart requestAnimationFrame
+                startSpawning(); // Re-establish intervals
+            }
+        }
+
         // Game animation loop
         function animate() {
-            if (isGameOver) return; // Stop animation if game is over
+            if (isGameOver || isPaused) return; // Stop animation if game is paused or over
+
+            const currentTime = Date.now(); // Get current time in milliseconds
 
             // Update the animation mixer with the time elapsed since the last frame
             const delta = clock.getDelta();
@@ -492,15 +945,37 @@
 
                 // If segment has moved completely past the camera's view (its front edge is behind the camera)
                 // Move it back to the beginning of the road chain
-                if (segment.position.z > camera.position.z + roadSegmentLength) { // Check if segment is fully past the camera's view
+                if (segment.position.z > camera.position.z + 20) { // If it's too far in front of the camera (passed player)
                     segment.position.z -= totalRoadLength; // Move it to the very back of the road chain
                 }
             });
 
+            // Dynamic spawning logic based on time and game speed
+            const spawnZ = camera.position.z - 100; // Z position where new objects are created (far behind camera)
+
+            // Calculate dynamic spawn intervals based on game speed
+            // As gameSpeed increases, the divisor (gameSpeed / initialGameSpeed) increases,
+            // making the effectiveSpawnTime smaller.
+            const effectiveObstacleSpawnTime = baseObstacleSpawnTime / (gameSpeed / initialGameSpeed);
+            const effectiveTokenSpawnTime = baseTokenSpawnTime / (gameSpeed / initialGameSpeed);
+
+            // Obstacle spawning
+            if (currentTime - lastObstacleSpawnTime >= effectiveObstacleSpawnTime) {
+                createObstacle(spawnZ); // Spawn far behind camera
+                lastObstacleSpawnTime = currentTime;
+            }
+
+            // Token spawning
+            if (currentTime - lastTokenSpawnTime >= effectiveTokenSpawnTime) {
+                createToken(spawnZ); // Spawn far behind camera
+                lastTokenSpawnTime = currentTime;
+            }
+
+
             // Move obstacles towards the player (they move with the road)
             obstacles.forEach((o, i) => {
                 o.position.z += gameSpeed; // Move along Z-axis (Z increases, moving towards player)
-                o.rotation.y += 0.05; // Make obstacles "dance" by rotating them
+                // Confirmed: Obstacles do not spin
 
                 // Check if obstacle has passed the camera (despawn)
                 if (o.position.z > camera.position.z + 20) { // If it's too far in front of the camera (passed player)
@@ -511,6 +986,7 @@
                 // Using a simple bounding box collision check
                 // Ensure player exists before checking collision
                 if (player) {
+                    // For collision, we need to check the bounding box of the entire group
                     const playerBox = new THREE.Box3().setFromObject(player);
                     const obstacleBox = new THREE.Box3().setFromObject(o);
                     if (playerBox.intersectsBox(obstacleBox)) {
@@ -534,6 +1010,7 @@
                 // Check for collection by player
                 // Ensure player exists before checking collection
                 if (player) {
+                    // For collection, we need to check the bounding box of the entire group
                     const playerBox = new THREE.Box3().setFromObject(player);
                     const tokenBox = new THREE.Box3().setFromObject(t);
                     if (playerBox.intersectsBox(tokenBox)) {
@@ -578,15 +1055,16 @@
         // Function to end the game
         function endGame(message) {
             isGameOver = true;
-            cancelAnimationFrame(animationFrameId); // Stop the animation loop
-            clearInterval(obstacleSpawnInterval); // Stop spawning obstacles
-            clearInterval(tokenSpawnInterval); // Stop spawning tokens
-            clearInterval(speedIntervalId); // Stop speed increase
+            renderer.setAnimationLoop(null); // Stop requestAnimationFrame
+            // Clear all intervals
+            clearInterval(speedIntervalId);
+            clearInterval(difficultyIntervalId);
             showMessageBox(message);
         }
 
         // Function to reset the game state
-        function resetGame() {
+        // Added a parameter to control if animation loop should be restarted immediately
+        function resetGame(restartAnimation = true) {
             // Clear existing obstacles and tokens from scene and arrays
             obstacles.forEach(o => scene.remove(o));
             tokens.forEach(t => scene.remove(t));
@@ -604,8 +1082,15 @@
             }
 
             gameSpeed = 0.2; // Reset game speed to initial positive value
+            // Reset lastZ to 0 for initial spawning (These are for the old distance-based check, not used for new time-based)
+            lastObstacleZ = 0;
+            lastTokenZ = 0;
+            currentObstacleSpawnDistance = initialObstacleSpawnDistance; // Reset obstacle spawn distance
+            currentTokenSpawnDistance = initialTokenSpawnDistance; // Reset token spawn distance
 
             isGameOver = false; // Reset game over flag
+            isPaused = false; // Ensure game is unpaused on reset
+            pauseButton.innerText = 'Pause'; // Reset pause button text
             hideMessageBox(); // Hide any message box
 
             // Reset animation mixer if it exists
@@ -618,48 +1103,38 @@
                 }
             }
             clock = new THREE.Clock(); // Reset clock for consistent timing
+            lastObstacleSpawnTime = Date.now(); // Reset spawn times for immediate spawn on reset
+            lastTokenSpawnTime = Date.now(); // Reset spawn times for immediate spawn on reset
 
-            // Re-setup road segments to ensure they are in initial positions
+
+            // Re-setup road segments
             setupRoad();
 
             // Restart spawning intervals and speed increase
             startSpawning();
 
-            // Restart animation loop if it was stopped
-            if (!animationFrameId || isGameOver) {
+            // Restart animation loop if requested
+            if (restartAnimation) {
                 renderer.setAnimationLoop(animate);
             }
         }
 
-        // Spawning intervals
-        let obstacleSpawnInterval;
-        let tokenSpawnInterval;
-
+        // Spawning intervals (now only for speed and difficulty increase, not direct object spawning)
         function startSpawning() {
             // Clear any existing intervals to prevent duplicates on reset
-            if (obstacleSpawnInterval) clearInterval(obstacleSpawnInterval);
-            if (tokenSpawnInterval) clearInterval(tokenSpawnInterval);
-            if (speedIntervalId) clearInterval(speedIntervalId); // Clear existing speed interval
-
-            // Spawn obstacles every 2 seconds
-            // Obstacles spawn at a fixed Z relative to the world origin, far behind the player
-            obstacleSpawnInterval = setInterval(() => {
-                if (!isGameOver) createObstacle(camera.position.z - 100);
-            }, 2000);
-
-            // Spawn tokens every 3 seconds
-            // Tokens spawn at a fixed Z relative to the world origin, far behind the player
-            tokenSpawnInterval = setInterval(() => {
-                if (!isGameOver) createToken(camera.position.z - 100);
-            }, 3000);
+            if (speedIntervalId) clearInterval(speedIntervalId);
+            if (difficultyIntervalId) clearInterval(difficultyIntervalId);
 
             // Start speed increase interval
             speedIntervalId = setInterval(increaseGameSpeed, speedIncreaseIntervalTime);
+
+            // Start difficulty increase interval (for spawn distances)
+            difficultyIntervalId = setInterval(decreaseSpawnDistances, distanceDecreaseIntervalTime);
         }
 
         // Key controls for player movement
         window.addEventListener('keydown', (e) => {
-            if (isGameOver || !player) return; // Disable controls if game is over or player not loaded
+            if (isGameOver || isPaused || !player) return; // Disable controls if game is paused
 
             if (e.code === 'ArrowLeft' && currentLane > 0) {
                 currentLane--;
@@ -673,12 +1148,12 @@
         // Touch controls for player movement (swipe left/right)
         let touchStartX = 0;
         window.addEventListener('touchstart', (e) => {
-            if (isGameOver || !player) return;
+            if (isGameOver || isPaused || !player) return; // Disable controls if game is paused
             touchStartX = e.touches[0].clientX;
         });
 
         window.addEventListener('touchend', (e) => {
-            if (isGameOver || !player) return;
+            if (isGameOver || isPaused || !player) return; // Disable controls if game is paused
             // Corrected to get clientX directly from the first touch in changedTouches
             const touchEndX = e.changedTouches[0].clientX;
             const swipeThreshold = 50; // Minimum distance for a swipe
@@ -692,14 +1167,14 @@
             }
         });
 
-        // Event listener for the restart button
+        // Event listener for the restart button (from message box)
         document.getElementById('restart-button').addEventListener('click', resetGame);
 
         // Initialize the game when the window loads
         window.onload = function () {
             init(); // Setup scene, camera, renderer, and initial elements
-            startSpawning(); // Start spawning obstacles and tokens
-            // The animate loop will be started after the models are loaded in loadAssets()
+            // startSpawning() is now called by startGame()
+            // The animate loop will be started by startGame()
         };
     </script>
 </body>
