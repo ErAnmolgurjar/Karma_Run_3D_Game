@@ -764,7 +764,7 @@
             let obstacleGroup = new THREE.Group(); // Group to hold both English and Hindi text
             const badKarma = badKarmas[Math.floor(Math.random() * badKarmas.length)];
             // Unified color for all karma words
-            const material = new THREE.MeshPhongMaterial({ color: 0xFFFFFF, flatShading: true }); // Light grey/off-white color
+            const material = new THREE.MeshBasicMaterial({ color: 0xFFFFFF }); // Simple, bright, no lighting
 
             if (!font) {
                 console.warn("Font not loaded for obstacle text or is invalid. Using fallback box.");
@@ -824,7 +824,7 @@
             let tokenGroup = new THREE.Group(); // Group to hold both English and Hindi text
             const goodKarma = goodKarmas[Math.floor(Math.random() * goodKarmas.length)];
             // Unified color for all karma words
-            const material = new THREE.MeshPhongMaterial({ color: 0xFFFFFF, flatShading: true }); // Light grey/off-white color
+            const material = new THREE.MeshBasicMaterial({ color: 0xFFFFFF }); // Simple, bright, no lighting
 
             if (!font) {
                 console.warn("Font not loaded for token text or is invalid. Using fallback sphere.");
