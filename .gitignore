@@ -1,0 +1,41 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-store/
+
+# Python
+*.pyc
+__pycache__/
+.Python
+venv/
+env/
+.env
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Three.js specific (if any generated files)
+# For example, if you had a build step that outputs to a 'dist' folder
+/dist/
+/build/
+
+# Log files
+*.log
+
+# Temporary files
+*~
+*.bak
+*.tmp
