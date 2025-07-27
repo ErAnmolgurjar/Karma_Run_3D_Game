@@ -760,68 +760,10 @@
             // scene.add(new THREE.CameraHelper(dirLight.shadow.camera));
         }
 
-        // Function to create an obstacle (now 3D text for bad karma)
-        function createObstacle(z) {
-            let obstacleGroup = new THREE.Group(); // Group to hold both English and Hindi text
-            const badKarma = badKarmas[Math.floor(Math.random() * badKarmas.length)];
-            // Unified color for all karma words
-            const material = new THREE.MeshBasicMaterial({ color: 0xFFFFFF }); // Simple, bright, no lighting
 
-            if (!font) {
-                console.warn("Font not loaded for obstacle text or is invalid. Using fallback box.");
-                const geo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
-                const ob = new THREE.Mesh(geo, material);
-                obstacleGroup.add(ob); // Add fallback to group
-            } else {
-                try {
-                    // English text
-                    const englishTextGeo = new TextGeometry(badKarma.english, {
-                        font: font,
-                        size: 1.0, // Adjusted text size
-                        height: 0.3, // Adjusted text depth
-                        curveSegments: 12
-                    });
-                    englishTextGeo.computeBoundingBox();
-                    englishTextGeo.center();
-                    const englishTextMesh = new THREE.Mesh(englishTextGeo, material);
-                    obstacleGroup.add(englishTextMesh);
-
-                    // Hindi text, positioned below English text
-                    const hindiTextGeo = new TextGeometry(badKarma.hindi, {
-                        font: font,
-                        size: 0.7, // Smaller size for Hindi
-                        height: 0.2,
-                        curveSegments: 12
-                    });
-                    hindiTextGeo.computeBoundingBox();
-                    hindiTextGeo.center();
-                    const hindiTextMesh = new THREE.Mesh(hindiTextGeo, material);
-
-                    // Calculate vertical offset for Hindi text
-                    const englishTextHeight = englishTextGeo.boundingBox.max.y - englishTextGeo.boundingBox.min.y;
-                    const hindiTextHeight = hindiTextGeo.boundingBox.max.y - hindiTextGeo.boundingBox.min.y;
-                    // Position Hindi text below English text with a small gap
-                    hindiTextMesh.position.y = englishTextMesh.position.y - (englishTextHeight / 2) - (hindiTextHeight / 2) - 0.2;
-
-                    obstacleGroup.add(hindiTextMesh);
-                } catch (e) {
-                    console.error("Error creating 3D text for obstacle (font issue):", e);
-                    console.warn("Falling back to basic box for obstacle due to font error.");
-                    const geo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
-                    const ob = new THREE.Mesh(geo, material);
-                    obstacleGroup.add(ob); // Add fallback to group
-                }
-            }
-
-            // Position the entire group
-            obstacleGroup.position.set(lanePositions[Math.floor(Math.random() * 3)], 2.5, z);
-            obstacleGroup.castShadow = true;
-            scene.add(obstacleGroup);
-            obstacles.push(obstacleGroup);
-        }
 
         // Function to create a token (now 3D text for good karma)
-        function createToken(z) {
+        function createToken(z, laneIndex) {
             let tokenGroup = new THREE.Group(); // Group to hold both English and Hindi text
             const goodKarma = goodKarmas[Math.floor(Math.random() * goodKarmas.length)];
             // Unified color for all karma words
@@ -873,11 +815,104 @@
                 }
             }
 
-            // Position the entire group
-            tokenGroup.position.set(lanePositions[Math.floor(Math.random() * 3)], 2.5, z);
+            // Position the entire group in the specified lane
+            tokenGroup.position.set(lanePositions[laneIndex], 2.0, z);
             tokenGroup.castShadow = true;
             scene.add(tokenGroup);
             tokens.push(tokenGroup);
+        }
+
+        // Function to create an obstacle (now 3D text for bad karma)
+        function createObstacle(z, laneIndex) {
+            let obstacleGroup = new THREE.Group(); // Group to hold both English and Hindi text
+            const badKarma = badKarmas[Math.floor(Math.random() * badKarmas.length)];
+            // Unified color for all karma words
+            const material = new THREE.MeshBasicMaterial({ color: 0xFFFFFF }); // Simple, bright, no lighting
+
+            if (!font) {
+                console.warn("Font not loaded for obstacle text or is invalid. Using fallback box.");
+                const geo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+                const ob = new THREE.Mesh(geo, material);
+                obstacleGroup.add(ob); // Add fallback to group
+            } else {
+                try {
+                    // English text
+                    const englishTextGeo = new TextGeometry(badKarma.english, {
+                        font: font,
+                        size: 1.0, // Adjusted text size
+                        height: 0.3, // Adjusted text depth
+                        curveSegments: 12
+                    });
+                    englishTextGeo.computeBoundingBox();
+                    englishTextGeo.center();
+                    const englishTextMesh = new THREE.Mesh(englishTextGeo, material);
+                    obstacleGroup.add(englishTextMesh);
+
+                    // Hindi text, positioned below English text
+                    const hindiTextGeo = new TextGeometry(badKarma.hindi, {
+                        font: font,
+                        size: 0.7, // Smaller size for Hindi
+                        height: 0.2,
+                        curveSegments: 12
+                    });
+                    hindiTextGeo.computeBoundingBox();
+                    hindiTextGeo.center();
+                    const hindiTextMesh = new THREE.Mesh(hindiTextGeo, material);
+
+                    // Calculate vertical offset for Hindi text
+                    const englishTextHeight = englishTextGeo.boundingBox.max.y - englishTextGeo.boundingBox.min.y;
+                    const hindiTextHeight = hindiTextGeo.boundingBox.max.y - hindiTextGeo.boundingBox.min.y;
+                    // Position Hindi text below English text with a small gap
+                    hindiTextMesh.position.y = englishTextMesh.position.y - (englishTextHeight / 2) - (hindiTextHeight / 2) - 0.2;
+
+                    obstacleGroup.add(hindiTextMesh);
+                } catch (e) {
+                    console.error("Error creating 3D text for obstacle (font issue):", e);
+                    console.warn("Falling back to basic box for obstacle due to font error.");
+                    const geo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+                    const ob = new THREE.Mesh(geo, material);
+                    obstacleGroup.add(ob); // Add fallback to group
+                }
+            }
+
+            // Position the entire group in the specified lane
+            obstacleGroup.position.set(lanePositions[laneIndex], 2.5, z);
+            obstacleGroup.castShadow = true;
+            scene.add(obstacleGroup);
+            obstacles.push(obstacleGroup);
+        }
+
+        // New function to create a set of three karma objects (all lanes filled)
+        function createKarmaSet(z) {
+            // Create a random distribution of good and bad karma across all three lanes
+            const karmaDistribution = [];
+            
+            // Randomly decide how many good vs bad karma (1-2 good, 1-2 bad)
+            const goodCount = Math.floor(Math.random() * 2) + 1; // 1 or 2 good karma
+            const badCount = 3 - goodCount; // Remaining are bad karma
+            
+            // Fill the distribution array
+            for (let i = 0; i < goodCount; i++) {
+                karmaDistribution.push('good');
+            }
+            for (let i = 0; i < badCount; i++) {
+                karmaDistribution.push('bad');
+            }
+            
+            // Shuffle the distribution randomly
+            for (let i = karmaDistribution.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [karmaDistribution[i], karmaDistribution[j]] = [karmaDistribution[j], karmaDistribution[i]];
+            }
+            
+            // Create karma objects in each lane
+            for (let laneIndex = 0; laneIndex < 3; laneIndex++) {
+                if (karmaDistribution[laneIndex] === 'good') {
+                    createToken(z, laneIndex);
+                } else {
+                    createObstacle(z, laneIndex);
+                }
+            }
         }
 
         // Function to increase game speed over time
@@ -959,19 +994,13 @@
             // Calculate dynamic spawn intervals based on game speed
             // As gameSpeed increases, the divisor (gameSpeed / initialGameSpeed) increases,
             // making the effectiveSpawnTime smaller.
-            const effectiveObstacleSpawnTime = baseObstacleSpawnTime / (gameSpeed / initialGameSpeed);
-            const effectiveTokenSpawnTime = baseTokenSpawnTime / (gameSpeed / initialGameSpeed);
+            const effectiveSpawnTime = baseObstacleSpawnTime / (gameSpeed / initialGameSpeed);
 
-            // Obstacle spawning
-            if (currentTime - lastObstacleSpawnTime >= effectiveObstacleSpawnTime) {
-                createObstacle(spawnZ); // Spawn far behind camera
+            // Combined karma set spawning (all three lanes filled)
+            if (currentTime - lastObstacleSpawnTime >= effectiveSpawnTime) {
+                createKarmaSet(spawnZ); // Spawn a complete set of three karma objects
                 lastObstacleSpawnTime = currentTime;
-            }
-
-            // Token spawning
-            if (currentTime - lastTokenSpawnTime >= effectiveTokenSpawnTime) {
-                createToken(spawnZ); // Spawn far behind camera
-                lastTokenSpawnTime = currentTime;
+                lastTokenSpawnTime = currentTime; // Reset both timers
             }
 
 
