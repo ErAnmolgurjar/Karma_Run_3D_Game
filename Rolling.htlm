@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Scores Dashboard</title>
+    <!-- Tailwind CSS CDN for easy styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the body and overall layout */
+        body {
+            font-family: 'Inter', sans-serif; /* Using Inter font for a modern look */
+            background-color: #f0f2f5; /* Light gray background */
+            display: flex;
+            justify-content: center; /* Center content horizontally */
+            align-items: flex-start; /* Align content to the top */
+            min-height: 100vh; /* Full viewport height */
+            padding: 2rem; /* Padding around the main content */
+            box-sizing: border-box; /* Include padding in element's total width and height */
+        }
+        /* Styles for the main container holding the dashboard */
+        .container {
+            background-color: #ffffff; /* White background for the card */
+            border-radius: 1rem; /* Rounded corners for the container */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* Subtle shadow */
+            padding: 2rem; /* Inner padding */
+            width: 100%; /* Full width on smaller screens */
+            max-width: 800px; /* Max width for larger screens */
+            box-sizing: border-box;
+        }
+        /* Styles for individual game score cards */
+        .score-card {
+            background-color: #f9fafb; /* Slightly off-white background for cards */
+            border-radius: 0.75rem; /* Rounded corners for cards */
+            padding: 1.5rem; /* Inner padding */
+            margin-bottom: 1rem; /* Space between cards */
+            display: flex;
+            flex-direction: row; /* Arrange items horizontally */
+            justify-content: space-between; /* Distribute items with space between them */
+            align-items: center; /* Vertically align items in the center */
+            border: 1px solid #e5e7eb; /* Light border */
+        }
+        /* Styles for the rolling score value */
+        .score-value {
+            font-size: 2.5rem; /* Large font size */
+            font-weight: bold; /* Bold text */
+            color: #1f2937; /* Dark gray text */
+            min-width: 80px; /* Ensure enough space for numbers during animation */
+            text-align: center; /* Center align numbers within their space */
+            flex-grow: 1; /* Allow score to take available space */
+            margin: 0 1rem; /* Horizontal margin for spacing */
+        }
+        /* Styles for the game name */
+        .game-name {
+            font-size: 1.5rem; /* Medium font size */
+            font-weight: 600; /* Semi-bold */
+            color: #374151; /* Darker gray text */
+            flex-basis: 30%; /* Give game name some fixed basis */
+        }
+        /* Styles for player information (currently a placeholder) */
+        .player-info {
+            font-size: 1rem; /* Standard font size */
+            color: #6b7280; /* Muted gray text */
+            flex-basis: 30%; /* Give player info some fixed basis */
+            text-align: right; /* Align player name to the right */
+        }
+        /* Styles for the loading spinner */
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1); /* Light border for the spinner circle */
+            border-left-color: #3b82f6; /* Blue color for the spinning part */
+            border-radius: 50%; /* Make it a circle */
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite; /* Spin animation */
+            margin: 2rem auto; /* Center the spinner */
+            display: none; /* Hidden by default, shown when loading */
+        }
+        /* Keyframes for the spinning animation */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-6 text-center">Game Scores Dashboard</h1>
+
+        <!-- Container where game score cards will be dynamically inserted -->
+        <div id="scores-container" class="space-y-4">
+            <!-- Game score cards will be inserted here by JavaScript -->
+        </div>
+
+        <!-- Loading spinner and error message -->
+        <div id="loading-indicator" class="loading-spinner"></div>
+        <p id="error-message" class="text-red-500 text-center mt-4 hidden">Failed to load data. Please try again later.</p>
+    </div>
+
+    <script>
+        // Your Google Apps Script Web App URL
+        const API_URL = 'https://script.google.com/macros/s/AKfycbzz8K_YjYyVKBJ_kURXvV_QkoXhVC3hpycshVX9TAPHJEt1A05gK8cju0a5glC2Io3T/exec';
+
+        // Get references to DOM elements
+        const scoresContainer = document.getElementById('scores-container');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const errorMessage = document.getElementById('error-message');
+
+        /**
+         * Animates a number from a start value to an end value with a rolling effect.
+         * Uses requestAnimationFrame for smooth animation.
+         * @param {HTMLElement} element The DOM element whose textContent will be animated.
+         * @param {number} start The starting number for the animation.
+         * @param {number} end The target number for the animation.
+         * @param {number} duration The duration of the animation in milliseconds.
+         */
+        function animateNumber(element, start, end, duration) {
+            let startTime = null; // To store the start time of the animation frame
+            const range = end - start; // The total range of numbers to animate over
+
+            function step(currentTime) {
+                if (!startTime) startTime = currentTime; // Record start time on first frame
+                const elapsed = currentTime - startTime; // Time elapsed since animation started
+                // Calculate progress (0 to 1)
+                const progress = Math.min(elapsed / duration, 1);
+                // Calculate current value based on progress, rounded down to integer
+                const currentValue = Math.floor(start + range * progress);
+                element.textContent = currentValue; // Update element's text content
+
+                // Continue animation if not yet finished
+                if (progress < 1) {
+                    requestAnimationFrame(step);
+                } else {
+                    // Ensure the final value is exactly the 'end' value
+                    element.textContent = end;
+                }
+            }
+            // Start the animation loop
+            requestAnimationFrame(step);
+        }
+
+        /**
+         * Fetches game scores from the API and displays them on the web page.
+         * Includes loading indicator and error handling.
+         */
+        async function fetchGameScores() {
+            scoresContainer.innerHTML = ''; // Clear any existing scores
+            loadingIndicator.style.display = 'block'; // Show the loading spinner
+            errorMessage.style.display = 'none'; // Hide any previous error messages
+
+            try {
+                // Fetch data from the Google Apps Script API
+                const response = await fetch(API_URL);
+                // Check if the HTTP response was successful
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                // Parse the JSON response
+                const data = await response.json();
+
+                // Handle cases where the API returns an error or no data
+                if (Object.keys(data).length === 0 || data.error || data.message) {
+                    errorMessage.textContent = data.error || data.message || "No data available from the API.";
+                    errorMessage.style.display = 'block';
+                    return; // Exit function if no valid data
+                }
+
+                // Iterate over the fetched game scores and create display cards
+                for (const gameName in data) {
+                    const score = data[gameName];
+
+                    // Create the main card div
+                    const card = document.createElement('div');
+                    card.className = 'score-card'; // This class now uses flex-direction: row
+
+                    // Create and append the game name element
+                    const gameNameElem = document.createElement('div');
+                    gameNameElem.className = 'game-name';
+                    gameNameElem.textContent = gameName;
+                    card.appendChild(gameNameElem);
+
+                    // Create the score value element
+                    const scoreValueElem = document.createElement('div');
+                    scoreValueElem.className = 'score-value';
+                    scoreValueElem.textContent = '0'; // Start at 0 for the rolling animation
+                    card.appendChild(scoreValueElem);
+
+                    // Dummy Player Name element
+                    const playerNameElem = document.createElement('div');
+                    playerNameElem.className = 'player-info';
+                    playerNameElem.textContent = 'Dummy Player'; // Changed from 'Player: Dummy Player'
+                    card.appendChild(playerNameElem);
+
+                    scoresContainer.appendChild(card);
+
+                    // Animate the score from 0 to its actual value over 1 second
+                    animateNumber(scoreValueElem, 0, score, 1000);
+                }
+            } catch (error) {
+                // Log and display error if fetching fails
+                console.error('Error fetching game scores:', error);
+                errorMessage.textContent = 'Failed to load data. Please check the API URL or network connection.';
+                errorMessage.style.display = 'block';
+            } finally {
+                // Hide the loading spinner once fetching is complete (success or failure)
+                loadingIndicator.style.display = 'none';
+            }
+        }
+
+        // Fetch scores when the entire HTML document has been loaded and parsed
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchGameScores(); // Initial fetch on page load
+            // Set up interval to fetch scores every 1 minute (60000 milliseconds)
+            setInterval(fetchGameScores, 60000);
+        });
+    </script>
+</body>
+</html>
