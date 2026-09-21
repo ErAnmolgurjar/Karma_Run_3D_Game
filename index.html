@@ -423,14 +423,14 @@
             // Add event listener for window resizing to make the game responsive
             window.addEventListener('resize', onWindowResize, false);
 
-            // Load tree model and font in the background while form is displayed
-            await loadAssets();
-
-            // Add event listener for form submission
+            // Add event listener for form submission (before loadAssets so it works immediately)
             startForm.addEventListener('submit', async (e) => {
                 e.preventDefault(); // Prevent default form submission
                 await startGame();
             });
+
+            // Load tree model and font in the background while form is displayed
+            await loadAssets();
 
             // Add event listeners for game control buttons
             pauseButton.addEventListener('click', togglePause);
