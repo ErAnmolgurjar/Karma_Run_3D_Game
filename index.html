@@ -6,191 +6,239 @@
     <title>Karma Run 3D - Seva Edition</title>
     <link rel="icon" type="image/png" href="Fevicon.png">
     <style>
+        * { box-sizing: border-box; }
         body {
             margin: 0;
             overflow: hidden;
-            font-family: 'Inter', sans-serif; /* Using Inter font */
-            background-color: #f0f0f0; /* Light background for overall page */
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f0f0;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
         }
         canvas {
             display: block;
-            background-color: #87ceeb; /* Sky blue background for the game world */
+            background-color: #87ceeb;
             width: 100%;
             height: 100%;
+            touch-action: none;
         }
+
+        /* ── Scoreboard ── */
         #scoreboard {
             position: absolute;
-            top: 20px;
+            top: 16px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(255, 255, 255, 0.9);
-            padding: 15px 30px;
-            font-size: 22px;
+            background: rgba(255, 255, 255, 0.92);
+            padding: 10px 24px;
+            font-size: 20px;
             font-weight: bold;
             color: #333;
             border-radius: 15px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
             z-index: 10;
             border: 2px solid #ccc;
-            display: flex; /* Initially hidden, shown by JS */
-            gap: 30px;
-            align-items: center;
-        }
-        .karma-score {
             display: flex;
+            gap: 24px;
             align-items: center;
+            white-space: nowrap;
         }
-        .karma-icon {
-            font-size: 28px;
-            margin-right: 10px;
-        }
-        .good-karma-icon {
-            color: #4CAF50; /* Green for good karma */
-        }
-        .bad-karma-icon {
-            color: #f44336; /* Red for bad karma */
-        }
+        .karma-score { display: flex; align-items: center; }
+        .karma-icon { font-size: 24px; margin-right: 8px; }
+        .good-karma-icon { color: #4CAF50; }
+        .bad-karma-icon  { color: #f44336; }
+
+        /* ── Message box ── */
         #message-box {
             position: absolute;
-            top: 50%;
-            left: 50%;
+            top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0,0,0,0.85);
             color: #fff;
-            padding: 30px;
+            padding: 30px 36px;
             border-radius: 15px;
             text-align: center;
-            font-size: 24px;
+            font-size: 22px;
             z-index: 100;
-            display: none; /* Hidden by default */
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+            display: none;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+            width: 90%;
+            max-width: 420px;
         }
         #message-box button {
             background-color: #007bff;
             color: white;
             border: none;
-            padding: 12px 25px;
+            padding: 14px 28px;
             margin-top: 20px;
             border-radius: 8px;
             cursor: pointer;
             font-size: 18px;
-            transition: background-color 0.3s ease, transform 0.2s ease;
+            transition: background-color 0.3s, transform 0.2s;
+            -webkit-tap-highlight-color: transparent;
         }
-        #message-box button:hover {
-            background-color: #0056b3;
-            transform: translateY(-2px);
-        }
-        /* Styles for game controls */
+        #message-box button:hover { background-color: #0056b3; transform: translateY(-2px); }
+
+        /* ── Game controls (bottom bar) ── */
         #game-controls {
             position: absolute;
-            bottom: 20px;
+            bottom: 16px;
             left: 50%;
             transform: translateX(-50%);
-            display: flex; /* Initially hidden, shown by JS */
-            gap: 20px;
+            display: flex;
+            gap: 12px;
             z-index: 10;
         }
         #game-controls button {
-            background-color: #28a745; /* Green for pause/resume */
+            background-color: #28a745;
             color: white;
             border: none;
-            padding: 12px 25px;
+            padding: 10px 20px;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 18px;
-            transition: background-color 0.3s ease, transform 0.2s ease;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            font-size: 16px;
+            transition: background-color 0.3s, transform 0.2s;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            -webkit-tap-highlight-color: transparent;
         }
-        #game-controls button:hover {
-            background-color: #218838;
-            transform: translateY(-2px);
-        }
-        #game-controls button#restart-button-main { /* Specific style for the main restart button */
-            background-color: #dc3545; /* Red for restart */
-        }
-        #game-controls button#restart-button-main:hover {
-            background-color: #c82333;
-        }
+        #game-controls button:hover { background-color: #218838; transform: translateY(-2px); }
+        #game-controls button#restart-button-main { background-color: #dc3545; }
+        #game-controls button#restart-button-main:hover { background-color: #c82333; }
 
-        /* Styles for the start form */
+        /* ── Start form ── */
         #start-form-container {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.85); /* Dark overlay */
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
             display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 200; /* Above everything else */
+            z-index: 200;
             color: white;
             flex-direction: column;
-            font-size: 20px;
+            padding: 16px;
         }
         #start-form {
             background: #333;
-            padding: 40px;
+            padding: 32px;
             border-radius: 15px;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
             display: flex;
             flex-direction: column;
-            gap: 20px;
-            width: 90%;
+            gap: 16px;
+            width: 100%;
             max-width: 400px;
         }
-        #start-form label {
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #eee;
-        }
+        #start-form h2 { margin: 0; font-size: 22px; color: #fff; text-align: center; }
+        #start-form label { font-weight: bold; color: #eee; font-size: 16px; }
         #start-form input[type="text"],
         #start-form select {
-            width: calc(100% - 20px);
-            padding: 12px 10px;
+            width: 100%;
+            padding: 12px;
             border: 1px solid #555;
             border-radius: 8px;
             background-color: #444;
             color: white;
-            font-size: 18px;
-            box-sizing: border-box; /* Include padding in width */
+            font-size: 17px;
         }
-        #start-form input[type="text"]::placeholder {
-            color: #bbb;
-        }
+        #start-form input[type="text"]::placeholder { color: #bbb; }
         #start-form button {
             background-color: #007bff;
             color: white;
             border: none;
-            padding: 15px 30px;
+            padding: 14px;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 20px;
-            font-weight: bold;
-            transition: background-color 0.3s ease, transform 0.2s ease;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            margin-top: 10px;
-        }
-        #start-form button:hover {
-            background-color: #0056b3;
-            transform: translateY(-2px);
-        }
-
-        /* Styles for Player Name Display */
-        #player-name-display {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 10px 20px;
             font-size: 18px;
             font-weight: bold;
+            transition: background-color 0.3s, transform 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #start-form button:hover { background-color: #0056b3; transform: translateY(-2px); }
+
+        /* ── Player name display ── */
+        #player-name-display {
+            position: absolute;
+            top: 16px; right: 16px;
+            background: rgba(255,255,255,0.92);
+            padding: 8px 16px;
+            font-size: 16px;
+            font-weight: bold;
             color: #333;
-            border-radius: 15px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
             z-index: 10;
             border: 2px solid #ccc;
-            display: none; /* Hidden by default, shown by JS */
+            display: none;
+            max-width: 160px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* ── Loading indicator ── */
+        #loading-indicator {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.72);
+            color: white;
+            padding: 20px 32px;
+            border-radius: 12px;
+            text-align: center;
+            font-size: 15px;
+            z-index: 50;
+            display: none;
+            pointer-events: none;
+        }
+        .loading-spinner {
+            width: 36px; height: 36px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 10px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Mobile swipe buttons (left / right sides of screen) ── */
+        #swipe-left, #swipe-right {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 72px;
+            height: 180px;
+            background: rgba(255,255,255,0.15);
+            border: 2px solid rgba(255,255,255,0.4);
+            border-radius: 12px;
+            color: white;
+            font-size: 36px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 15;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+            transition: background 0.15s;
+        }
+        #swipe-left  { left: 8px; }
+        #swipe-right { right: 8px; }
+        #swipe-left:active, #swipe-right:active { background: rgba(255,255,255,0.35); }
+
+        /* ── Responsive breakpoints ── */
+        @media (max-width: 600px) {
+            #scoreboard { font-size: 14px; padding: 8px 14px; gap: 14px; top: 10px; }
+            .karma-icon  { font-size: 18px; margin-right: 5px; }
+            #game-controls { gap: 8px; bottom: 10px; }
+            #game-controls button { padding: 8px 12px; font-size: 13px; }
+            #player-name-display { font-size: 13px; padding: 6px 10px; top: 10px; right: 10px; max-width: 120px; }
+            #message-box { font-size: 18px; padding: 22px 20px; }
+        }
+        @media (max-width: 380px) {
+            #game-controls button { padding: 7px 9px; font-size: 12px; }
+            #start-form { padding: 22px; gap: 12px; }
         }
     </style>
 </head>
@@ -243,6 +291,16 @@
         <button id="restart-button-main">Restart Game</button>
         <button id="change-player-button">Change Player</button>
     </div>
+
+    <!-- Loading indicator shown while FBX character model downloads -->
+    <div id="loading-indicator">
+        <div class="loading-spinner"></div>
+        <p style="margin:0;">Loading character…</p>
+    </div>
+
+    <!-- Mobile swipe / tap buttons (shown only on touch devices) -->
+    <div id="swipe-left">&#9664;</div>
+    <div id="swipe-right">&#9654;</div>
 
     <!-- Import Map for Three.js modules -->
     <script type="importmap">
@@ -474,11 +532,13 @@
                         console.warn('No animations found in the loaded FBX player model.');
                     }
                     scene.add(player);
+                    document.getElementById('loading-indicator').style.display = 'none';
                     resolve();
                 }, undefined, (error) => {
                     console.error('An error occurred loading the FBX player model:', error);
-                    createBasicPlayerPlaceholder(); // Fallback to basic player
-                    resolve(); // Resolve even on error to continue game initialization
+                    document.getElementById('loading-indicator').style.display = 'none';
+                    createBasicPlayerPlaceholder(); // Fallback only when FBX truly fails
+                    resolve();
                 });
             });
         }
@@ -486,36 +546,41 @@
 
         // Function to start the game after form submission
         function startGame() {
-            // Hide the start form
             startFormContainer.style.display = 'none';
-            // Show scoreboard and game controls
             scoreboard.style.display = 'flex';
             document.getElementById('game-controls').style.display = 'flex';
             playerNameDisplay.style.display = 'block';
 
-            // Get player details
             const name = playerNameInput.value;
             const gender = playerGenderSelect.value;
             currentPlayersName.innerText = name;
 
-            // Show a basic placeholder immediately so the game starts without waiting for the large FBX download
-            createBasicPlayerPlaceholder();
-            setupLighting();
-            resetGame(); // Sets up road, spawning intervals, and starts animation loop
+            // Show swipe buttons on touch-capable devices
+            if (window.matchMedia('(pointer: coarse)').matches) {
+                document.getElementById('swipe-left').style.display = 'flex';
+                document.getElementById('swipe-right').style.display = 'flex';
+            }
 
-            // Load the FBX model in the background; it replaces the placeholder when ready
+            // Start road + animation immediately (no placeholder — show loading indicator instead)
+            setupLighting();
+            resetGame();
+
+            // Show loading indicator while the FBX character model downloads
+            document.getElementById('loading-indicator').style.display = 'block';
+
             const playerModelPath = (gender === 'female') ? './Fast_Run_Girl.fbx' : './Fast_Run_Boy.fbx';
             loadPlayerModel(playerModelPath);
         }
 
         // Function to show the player selection form and reset the game
         function showPlayerSelectionFormAndResetGame() {
-            // Hide game elements
             scoreboard.style.display = 'none';
             document.getElementById('game-controls').style.display = 'none';
             playerNameDisplay.style.display = 'none';
+            document.getElementById('swipe-left').style.display = 'none';
+            document.getElementById('swipe-right').style.display = 'none';
+            document.getElementById('loading-indicator').style.display = 'none';
 
-            // Show the start form
             startFormContainer.style.display = 'flex';
 
             // Stop the current game animation and clear intervals
@@ -999,47 +1064,44 @@
             }
 
 
-            // Compute player bounding box once per frame for collision checks
-            const playerBox = player ? new THREE.Box3().setFromObject(player) : null;
+            // Lane+Z proximity collision — reliable for animated SkinnedMesh FBX models.
+            // Objects are spawned at exact lanePositions values, so X match just checks the same lane.
+            // Player is always at Z=5; detect collision when an object enters a 4-unit window around it.
+            const PLAYER_Z = 5;
+            const playerLaneX = lanePositions[currentLane];
 
-            // Move obstacles and check collisions (iterate backwards so splice is safe)
             for (let i = obstacles.length - 1; i >= 0; i--) {
                 const o = obstacles[i];
                 o.position.z += gameSpeed;
 
-                let removeObstacle = o.position.z > camera.position.z + 20;
-                if (!removeObstacle && playerBox) {
-                    const obstacleBox = new THREE.Box3().setFromObject(o);
-                    if (playerBox.intersectsBox(obstacleBox)) {
+                let remove = o.position.z > camera.position.z + 20;
+                if (!remove) {
+                    const xClose = Math.abs(o.position.x - playerLaneX) < laneWidth * 0.55;
+                    const zClose = Math.abs(o.position.z - PLAYER_Z) < 3.5;
+                    if (xClose && zClose) {
                         karma.bad++;
                         updateScoreboard();
-                        removeObstacle = true;
+                        remove = true;
                     }
                 }
-                if (removeObstacle) {
-                    scene.remove(o);
-                    obstacles.splice(i, 1);
-                }
+                if (remove) { scene.remove(o); obstacles.splice(i, 1); }
             }
 
-            // Move tokens and check collection (iterate backwards so splice is safe)
             for (let i = tokens.length - 1; i >= 0; i--) {
                 const t = tokens[i];
                 t.position.z += gameSpeed;
 
-                let removeToken = t.position.z > camera.position.z + 20;
-                if (!removeToken && playerBox) {
-                    const tokenBox = new THREE.Box3().setFromObject(t);
-                    if (playerBox.intersectsBox(tokenBox)) {
+                let remove = t.position.z > camera.position.z + 20;
+                if (!remove) {
+                    const xClose = Math.abs(t.position.x - playerLaneX) < laneWidth * 0.55;
+                    const zClose = Math.abs(t.position.z - PLAYER_Z) < 3.5;
+                    if (xClose && zClose) {
                         karma.good++;
                         updateScoreboard();
-                        removeToken = true;
+                        remove = true;
                     }
                 }
-                if (removeToken) {
-                    scene.remove(t);
-                    tokens.splice(i, 1);
-                }
+                if (remove) { scene.remove(t); tokens.splice(i, 1); }
             }
 
             // Update scoreboard display
@@ -1094,10 +1156,9 @@
             updateScoreboard(); // Update scoreboard display
 
             currentLane = 1; // Reset player to middle lane
-            // Ensure player exists before setting position
+            targetPlayerX = lanePositions[currentLane]; // Always reset lane target
             if (player) {
-                player.position.x = lanePositions[currentLane]; // Update player position
-                targetPlayerX = lanePositions[currentLane]; // Reset target player X
+                player.position.x = lanePositions[currentLane];
             }
 
             gameSpeed = 0.2; // Reset game speed to initial positive value
@@ -1153,38 +1214,55 @@
 
         // Key controls for player movement
         window.addEventListener('keydown', (e) => {
-            if (isGameOver || isPaused || !player) return; // Disable controls if game is paused
-
-            if (e.code === 'ArrowLeft' && currentLane > 0) {
-                currentLane--;
-                targetPlayerX = lanePositions[currentLane]; // Update target X
-            } else if (e.code === 'ArrowRight' && currentLane < 2) {
-                currentLane++;
-                targetPlayerX = lanePositions[currentLane]; // Update target X
-            }
+            if (isGameOver || isPaused) return;
+            if (e.code === 'ArrowLeft') moveLaneLeft();
+            else if (e.code === 'ArrowRight') moveLaneRight();
         });
 
-        // Touch controls for player movement (swipe left/right)
+        // Touch controls — swipe left/right to change lanes
         let touchStartX = 0;
+        let touchStartY = 0;
+
+        function moveLaneLeft() {
+            if (isGameOver || isPaused) return;
+            if (currentLane > 0) { currentLane--; targetPlayerX = lanePositions[currentLane]; }
+        }
+        function moveLaneRight() {
+            if (isGameOver || isPaused) return;
+            if (currentLane < 2) { currentLane++; targetPlayerX = lanePositions[currentLane]; }
+        }
+
         window.addEventListener('touchstart', (e) => {
-            if (isGameOver || isPaused || !player) return; // Disable controls if game is paused
+            // Allow touches on UI buttons to pass through normally
+            if (e.target.id === 'swipe-left' || e.target.id === 'swipe-right') return;
+            if (isGameOver || isPaused) return;
+            e.preventDefault();
             touchStartX = e.touches[0].clientX;
-        });
+            touchStartY = e.touches[0].clientY;
+        }, { passive: false });
 
         window.addEventListener('touchend', (e) => {
-            if (isGameOver || isPaused || !player) return; // Disable controls if game is paused
-            // Corrected to get clientX directly from the first touch in changedTouches
-            const touchEndX = e.changedTouches[0].clientX;
-            const swipeThreshold = 50; // Minimum distance for a swipe
-
-            if (touchEndX < touchStartX - swipeThreshold && currentLane > 0) {
-                currentLane--;
-                targetPlayerX = lanePositions[currentLane]; // Update target X
-            } else if (touchEndX > touchStartX + swipeThreshold && currentLane < 2) {
-                currentLane++;
-                targetPlayerX = lanePositions[currentLane]; // Update target X
+            if (e.target.id === 'swipe-left' || e.target.id === 'swipe-right') return;
+            if (isGameOver || isPaused) return;
+            e.preventDefault();
+            const dx = e.changedTouches[0].clientX - touchStartX;
+            const dy = e.changedTouches[0].clientY - touchStartY;
+            // Only register as horizontal swipe if horizontal movement dominates
+            if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+                if (dx < 0) moveLaneLeft(); else moveLaneRight();
             }
-        });
+        }, { passive: false });
+
+        // Side tap buttons for mobile
+        document.getElementById('swipe-left').addEventListener('touchstart', (e) => {
+            e.preventDefault(); e.stopPropagation(); moveLaneLeft();
+        }, { passive: false });
+        document.getElementById('swipe-right').addEventListener('touchstart', (e) => {
+            e.preventDefault(); e.stopPropagation(); moveLaneRight();
+        }, { passive: false });
+        // Mouse fallback for testing on desktop
+        document.getElementById('swipe-left').addEventListener('mousedown', moveLaneLeft);
+        document.getElementById('swipe-right').addEventListener('mousedown', moveLaneRight);
 
         // Initialize the game when the window loads
         window.onload = function () {
