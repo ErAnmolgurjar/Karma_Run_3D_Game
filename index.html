@@ -12,7 +12,6 @@
             overflow: hidden;
             font-family: 'Inter', sans-serif;
             background-color: #f0f0f0;
-            touch-action: none;
             user-select: none;
             -webkit-user-select: none;
         }
@@ -21,7 +20,13 @@
             background-color: #87ceeb;
             width: 100%;
             height: 100%;
-            touch-action: none;
+            touch-action: none; /* prevent scroll/zoom on the game canvas only */
+        }
+        /* Re-enable all touch interaction inside the start form so inputs focus normally */
+        #start-form-container, #start-form-container * {
+            touch-action: auto;
+            user-select: auto;
+            -webkit-user-select: auto;
         }
 
         /* ── Scoreboard ── */
@@ -561,15 +566,22 @@
                 document.getElementById('swipe-right').style.display = 'flex';
             }
 
-            // Start road + animation immediately (no placeholder — show loading indicator instead)
+            // Set up the scene but do NOT start the animation loop yet
             setupLighting();
-            resetGame();
+            resetGame(false); // false = don't start animation loop
 
-            // Show loading indicator while the FBX character model downloads
+            // Render one still frame so the road is visible while the character loads
+            renderer.render(scene, camera);
+
+            // Show loading indicator while the FBX character model downloads (~27–51 MB)
             document.getElementById('loading-indicator').style.display = 'block';
 
             const playerModelPath = (gender === 'female') ? './Fast_Run_Girl.fbx' : './Fast_Run_Boy.fbx';
-            loadPlayerModel(playerModelPath);
+
+            // Start animation ONLY after the model is fully loaded (or failed to load)
+            loadPlayerModel(playerModelPath).then(() => {
+                renderer.setAnimationLoop(animate);
+            });
         }
 
         // Function to show the player selection form and reset the game
@@ -1232,9 +1244,20 @@
             if (currentLane < 2) { currentLane++; targetPlayerX = lanePositions[currentLane]; }
         }
 
+        function isFormElement(el) {
+            const tag = el ? el.tagName : '';
+            return tag === 'INPUT' || tag === 'SELECT' || tag === 'BUTTON' ||
+                   tag === 'TEXTAREA' || tag === 'LABEL' || tag === 'A';
+        }
+        function isFormVisible() {
+            return startFormContainer && startFormContainer.style.display !== 'none';
+        }
+
         window.addEventListener('touchstart', (e) => {
-            // Allow touches on UI buttons to pass through normally
             if (e.target.id === 'swipe-left' || e.target.id === 'swipe-right') return;
+            // Never block touches on interactive elements or while the form is open
+            // (doing so prevents the keyboard from appearing on mobile)
+            if (isFormElement(e.target) || isFormVisible()) return;
             if (isGameOver || isPaused) return;
             e.preventDefault();
             touchStartX = e.touches[0].clientX;
@@ -1243,11 +1266,11 @@
 
         window.addEventListener('touchend', (e) => {
             if (e.target.id === 'swipe-left' || e.target.id === 'swipe-right') return;
+            if (isFormElement(e.target) || isFormVisible()) return;
             if (isGameOver || isPaused) return;
             e.preventDefault();
             const dx = e.changedTouches[0].clientX - touchStartX;
             const dy = e.changedTouches[0].clientY - touchStartY;
-            // Only register as horizontal swipe if horizontal movement dominates
             if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
                 if (dx < 0) moveLaneLeft(); else moveLaneRight();
             }
