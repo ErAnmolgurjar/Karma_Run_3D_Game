@@ -299,7 +299,7 @@
         const treeSpacing = 10; // Approximate visual width of the tree for spacing, adjust as needed for your model
 
         // Player movement smoothing variables
-        let targetPlayerX; // The target X position the player is moving towards
+        let targetPlayerX = 0; // The target X position the player is moving towards
         const playerMoveSpeed = 0.1; // Controls the smoothness of lane changes (0.1 is a good starting point)
         let speedIntervalId; // Interval ID for speed increase
 
@@ -424,9 +424,9 @@
             window.addEventListener('resize', onWindowResize, false);
 
             // Add event listener for form submission (before loadAssets so it works immediately)
-            startForm.addEventListener('submit', async (e) => {
+            startForm.addEventListener('submit', (e) => {
                 e.preventDefault(); // Prevent default form submission
-                await startGame();
+                startGame();
             });
 
             // Load tree model and font in the background while form is displayed
@@ -461,6 +461,7 @@
                         player.scale.set(0.01, 0.01, 0.01); // Default size for the boy model (as it is)
                     }
                     player.position.set(lanePositions[currentLane], 0.2, 5);
+                    targetPlayerX = lanePositions[currentLane]; // Sync with current lane when model swaps in
                     player.rotation.y = Math.PI;
                     player.traverse(function (object) {
                         if (object.isMesh) object.castShadow = true;
@@ -484,7 +485,7 @@
 
 
         // Function to start the game after form submission
-        async function startGame() {
+        function startGame() {
             // Hide the start form
             startFormContainer.style.display = 'none';
             // Show scoreboard and game controls
@@ -495,22 +496,16 @@
             // Get player details
             const name = playerNameInput.value;
             const gender = playerGenderSelect.value;
-            console.log(`Player Name: ${name}, Gender: ${gender}`);
             currentPlayersName.innerText = name;
 
-            // Determine player model path based on gender
-            const playerModelPath = (gender === 'female') ? './Fast_Run_Girl.fbx' : './Fast_Run_Boy.fbx';
-
-            // Load the correct player model
-            await loadPlayerModel(playerModelPath);
-
-            // Setup initial game elements
-            setupRoad();
+            // Show a basic placeholder immediately so the game starts without waiting for the large FBX download
+            createBasicPlayerPlaceholder();
             setupLighting();
-            resetGame(); // This will also start spawning intervals and animation loop
+            resetGame(); // Sets up road, spawning intervals, and starts animation loop
 
-            // Start the animation loop
-            renderer.setAnimationLoop(animate);
+            // Load the FBX model in the background; it replaces the placeholder when ready
+            const playerModelPath = (gender === 'female') ? './Fast_Run_Girl.fbx' : './Fast_Run_Boy.fbx';
+            loadPlayerModel(playerModelPath);
         }
 
         // Function to show the player selection form and reset the game
@@ -1004,56 +999,48 @@
             }
 
 
-            // Move obstacles towards the player (they move with the road)
-            obstacles.forEach((o, i) => {
-                o.position.z += gameSpeed; // Move along Z-axis (Z increases, moving towards player)
-                // Confirmed: Obstacles do not spin
+            // Compute player bounding box once per frame for collision checks
+            const playerBox = player ? new THREE.Box3().setFromObject(player) : null;
 
-                // Check if obstacle has passed the camera (despawn)
-                if (o.position.z > camera.position.z + 20) { // If it's too far in front of the camera (passed player)
-                    scene.remove(o); // Remove from scene
-                    obstacles.splice(i, 1); // Remove from array
-                }
-                // Check for collision with player
-                // Using a simple bounding box collision check
-                // Ensure player exists before checking collision
-                if (player) {
-                    // For collision, we need to check the bounding box of the entire group
-                    const playerBox = new THREE.Box3().setFromObject(player);
+            // Move obstacles and check collisions (iterate backwards so splice is safe)
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const o = obstacles[i];
+                o.position.z += gameSpeed;
+
+                let removeObstacle = o.position.z > camera.position.z + 20;
+                if (!removeObstacle && playerBox) {
                     const obstacleBox = new THREE.Box3().setFromObject(o);
                     if (playerBox.intersectsBox(obstacleBox)) {
-                        karma.bad++; // Increment bad karma for collision
+                        karma.bad++;
                         updateScoreboard();
-                        scene.remove(o);
-                        obstacles.splice(i, 1);
-                        // Optionally, add a visual/audio feedback for collision
+                        removeObstacle = true;
                     }
                 }
-            });
+                if (removeObstacle) {
+                    scene.remove(o);
+                    obstacles.splice(i, 1);
+                }
+            }
 
-            // Move tokens towards the player (they move with the road)
-            tokens.forEach((t, i) => {
-                t.position.z += gameSpeed; // Move along Z-axis (Z increases, moving towards player)
-                // Check if token has passed the camera (despawn)
-                if (t.position.z > camera.position.z + 20) { // If it's too far in front of the camera (passed player)
+            // Move tokens and check collection (iterate backwards so splice is safe)
+            for (let i = tokens.length - 1; i >= 0; i--) {
+                const t = tokens[i];
+                t.position.z += gameSpeed;
+
+                let removeToken = t.position.z > camera.position.z + 20;
+                if (!removeToken && playerBox) {
+                    const tokenBox = new THREE.Box3().setFromObject(t);
+                    if (playerBox.intersectsBox(tokenBox)) {
+                        karma.good++;
+                        updateScoreboard();
+                        removeToken = true;
+                    }
+                }
+                if (removeToken) {
                     scene.remove(t);
                     tokens.splice(i, 1);
                 }
-                // Check for collection by player
-                // Ensure player exists before checking collection
-                if (player) {
-                    // For collection, we need to check the bounding box of the entire group
-                    const playerBox = new THREE.Box3().setFromObject(player);
-                    const tokenBox = new THREE.Box3().setFromObject(t);
-                    if (playerBox.intersectsBox(tokenBox)) {
-                        karma.good++; // Increment good karma for collecting token
-                        updateScoreboard();
-                        scene.remove(t);
-                        tokens.splice(i, 1);
-                        // Optionally, add a visual/audio feedback for collection
-                    }
-                }
-            });
+            }
 
             // Update scoreboard display
             updateScoreboard();
@@ -1198,9 +1185,6 @@
                 targetPlayerX = lanePositions[currentLane]; // Update target X
             }
         });
-
-        // Event listener for the restart button (from message box)
-        document.getElementById('restart-button').addEventListener('click', resetGame);
 
         // Initialize the game when the window loads
         window.onload = function () {
