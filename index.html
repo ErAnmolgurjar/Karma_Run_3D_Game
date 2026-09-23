@@ -256,9 +256,9 @@
     </div>
 
     <!-- Player Name Display -->
-    <!-- <div id="player-name-display" style="display: none;">
-        Welcome, <span id="current-player-name"></span>
-    </div> -->
+    <!-- <div id="player-name-display" style="display: none;"> -->
+        <!-- Welcome, <span id="current-player-name"></span>-->
+    <!-- </div> -->
 
     <!-- Message box for game over/instructions -->
     <div id="message-box">
@@ -527,11 +527,11 @@
             startFormContainer.style.display = 'none';
             scoreboard.style.display = 'flex';
             document.getElementById('game-controls').style.display = 'flex';
-            playerNameDisplay.style.display = 'block';
+            if (playerNameDisplay) playerNameDisplay.style.display = 'block';
 
             const name = playerNameInput.value;
             const gender = playerGenderSelect.value;
-            currentPlayersName.innerText = name;
+            if (currentPlayersName) currentPlayersName.innerText = name;
 
             // Set up the scene but do NOT start the animation loop yet
             setupLighting();
@@ -555,7 +555,7 @@
         function showPlayerSelectionFormAndResetGame() {
             scoreboard.style.display = 'none';
             document.getElementById('game-controls').style.display = 'none';
-            playerNameDisplay.style.display = 'none';
+            if (playerNameDisplay) playerNameDisplay.style.display = 'none';
             document.getElementById('loading-indicator').style.display = 'none';
 
             startFormContainer.style.display = 'flex';
