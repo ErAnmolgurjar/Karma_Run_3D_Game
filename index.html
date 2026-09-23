@@ -208,30 +208,6 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* ── Mobile swipe buttons (left / right sides of screen) ── */
-        #swipe-left, #swipe-right {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 72px;
-            height: 180px;
-            background: rgba(255,255,255,0.15);
-            border: 2px solid rgba(255,255,255,0.4);
-            border-radius: 12px;
-            color: white;
-            font-size: 36px;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 15;
-            cursor: pointer;
-            -webkit-tap-highlight-color: transparent;
-            transition: background 0.15s;
-        }
-        #swipe-left  { left: 8px; }
-        #swipe-right { right: 8px; }
-        #swipe-left:active, #swipe-right:active { background: rgba(255,255,255,0.35); }
-
         /* ── Responsive breakpoints ── */
         @media (max-width: 600px) {
             #scoreboard { font-size: 14px; padding: 8px 14px; gap: 14px; top: 10px; }
@@ -302,10 +278,6 @@
         <div class="loading-spinner"></div>
         <p style="margin:0;">Loading character…</p>
     </div>
-
-    <!-- Mobile swipe / tap buttons (shown only on touch devices) -->
-    <div id="swipe-left">&#9664;</div>
-    <div id="swipe-right">&#9654;</div>
 
     <!-- Import Map for Three.js modules -->
     <script type="importmap">
@@ -385,11 +357,9 @@
         let pauseButton; // Reference to the pause button
         let changePlayerButton; // Reference to the change player button
 
-        // Variables for time-based spawning proportional to speed
-        let lastObstacleSpawnTime = 0;
-        let lastTokenSpawnTime = 0;
-        const baseObstacleSpawnTime = 2000; // Base milliseconds between obstacle spawns
-        const baseTokenSpawnTime = 3000; // Base milliseconds between token spawns
+        // Distance-based spawning: rows spawn once the world has scrolled far
+        // enough, so spacing stays consistent regardless of frame rate.
+        let distanceSinceLastSpawn = 0;
 
         // References to form elements
         let startFormContainer;
@@ -458,10 +428,14 @@
             clock = new THREE.Clock();
 
             // Renderer setup (WebGLRenderer for rendering 3D graphics)
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setPixelRatio(window.devicePixelRatio);
+            // Touch (mobile/tablet) devices get lighter settings — shadows and
+            // antialiasing are among the most expensive GPU features and are
+            // the main cause of jitter/stutter on phones.
+            const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
+            renderer = new THREE.WebGLRenderer({ antialias: !isTouchDevice });
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, isTouchDevice ? 1.5 : 2));
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.enabled = !isTouchDevice;
             document.body.appendChild(renderer.domElement);
 
             // Get scoreboard elements
@@ -560,12 +534,6 @@
             const gender = playerGenderSelect.value;
             currentPlayersName.innerText = name;
 
-            // Show swipe buttons on touch-capable devices
-            if (window.matchMedia('(pointer: coarse)').matches) {
-                document.getElementById('swipe-left').style.display = 'flex';
-                document.getElementById('swipe-right').style.display = 'flex';
-            }
-
             // Set up the scene but do NOT start the animation loop yet
             setupLighting();
             resetGame(false); // false = don't start animation loop
@@ -589,8 +557,6 @@
             scoreboard.style.display = 'none';
             document.getElementById('game-controls').style.display = 'none';
             playerNameDisplay.style.display = 'none';
-            document.getElementById('swipe-left').style.display = 'none';
-            document.getElementById('swipe-right').style.display = 'none';
             document.getElementById('loading-indicator').style.display = 'none';
 
             startFormContainer.style.display = 'flex';
@@ -834,6 +800,19 @@
 
 
 
+        // Disposes geometry/material of an Object3D and its children so removed
+        // obstacles/tokens don't leak GPU memory (text geometries are created
+        // fresh on every spawn and were previously never freed).
+        function disposeObject3D(obj) {
+            obj.traverse(child => {
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) {
+                    if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                    else child.material.dispose();
+                }
+            });
+        }
+
         // Function to create a token (now 3D text for good karma)
         function createToken(z, laneIndex) {
             let tokenGroup = new THREE.Group(); // Group to hold both English and Hindi text
@@ -853,7 +832,7 @@
                         font: font,
                         size: 0.8, // Adjusted text size
                         height: 0.2, // Adjusted text depth
-                        curveSegments: 12
+                        curveSegments: 6
                     });
                     englishTextGeo.computeBoundingBox();
                     englishTextGeo.center();
@@ -865,7 +844,7 @@
                         font: font,
                         size: 0.5, // Smaller size for Hindi
                         height: 0.15,
-                        curveSegments: 12
+                        curveSegments: 6
                     });
                     hindiTextGeo.computeBoundingBox();
                     hindiTextGeo.center();
@@ -913,7 +892,7 @@
                         font: font,
                         size: 1.0, // Adjusted text size
                         height: 0.3, // Adjusted text depth
-                        curveSegments: 12
+                        curveSegments: 6
                     });
                     englishTextGeo.computeBoundingBox();
                     englishTextGeo.center();
@@ -925,7 +904,7 @@
                         font: font,
                         size: 0.7, // Smaller size for Hindi
                         height: 0.2,
-                        curveSegments: 12
+                        curveSegments: 6
                     });
                     hindiTextGeo.computeBoundingBox();
                     hindiTextGeo.center();
@@ -1031,13 +1010,20 @@
         function animate() {
             if (isGameOver || isPaused) return; // Stop animation if game is paused or over
 
-            const currentTime = Date.now(); // Get current time in milliseconds
-
-            // Update the animation mixer with the time elapsed since the last frame
-            const delta = clock.getDelta();
+            // Update the animation mixer with the time elapsed since the last frame.
+            // Clamp to avoid huge position jumps (and skipped collisions) after a
+            // stall — e.g. a backgrounded mobile tab or a GC pause.
+            const delta = Math.min(clock.getDelta(), 0.1);
             if (mixer) {
                 mixer.update(delta);
             }
+
+            // Scale movement by real elapsed time (normalized to a 60fps baseline
+            // so existing gameSpeed tuning values keep their feel). This keeps
+            // world movement — and therefore spacing between spawned rows —
+            // consistent no matter how fast or unevenly frames arrive, which is
+            // what was causing rows to bunch up on slower/janky mobile devices.
+            const frameMove = gameSpeed * delta * 60;
 
             // Smoothly move player towards target lane
             if (player && player.position.x !== targetPlayerX) {
@@ -1051,7 +1037,7 @@
             // Move road segments
             const totalRoadLength = roadSegmentLength * roadSegmentCount;
             roadSegments.forEach(segment => {
-                segment.position.z += gameSpeed; // gameSpeed is positive, so Z increases
+                segment.position.z += frameMove;
 
                 // If segment has moved completely past the camera's view (its front edge is behind the camera)
                 // Move it back to the beginning of the road chain
@@ -1060,19 +1046,16 @@
                 }
             });
 
-            // Dynamic spawning logic based on time and game speed
+            // Distance-based spawning: spawn a new row once the world has
+            // scrolled `currentObstacleSpawnDistance` units, so row spacing is
+            // consistent regardless of frame rate (currentObstacleSpawnDistance
+            // itself still shrinks over time via decreaseSpawnDistances() to
+            // ramp up difficulty).
             const spawnZ = camera.position.z - 100; // Z position where new objects are created (far behind camera)
-
-            // Calculate dynamic spawn intervals based on game speed
-            // As gameSpeed increases, the divisor (gameSpeed / initialGameSpeed) increases,
-            // making the effectiveSpawnTime smaller.
-            const effectiveSpawnTime = baseObstacleSpawnTime / (gameSpeed / initialGameSpeed);
-
-            // Combined karma set spawning (all three lanes filled)
-            if (currentTime - lastObstacleSpawnTime >= effectiveSpawnTime) {
+            distanceSinceLastSpawn += frameMove;
+            if (distanceSinceLastSpawn >= currentObstacleSpawnDistance) {
                 createKarmaSet(spawnZ); // Spawn a complete set of three karma objects
-                lastObstacleSpawnTime = currentTime;
-                lastTokenSpawnTime = currentTime; // Reset both timers
+                distanceSinceLastSpawn = 0;
             }
 
 
@@ -1084,7 +1067,7 @@
 
             for (let i = obstacles.length - 1; i >= 0; i--) {
                 const o = obstacles[i];
-                o.position.z += gameSpeed;
+                o.position.z += frameMove;
 
                 let remove = o.position.z > camera.position.z + 20;
                 if (!remove) {
@@ -1096,12 +1079,12 @@
                         remove = true;
                     }
                 }
-                if (remove) { scene.remove(o); obstacles.splice(i, 1); }
+                if (remove) { scene.remove(o); disposeObject3D(o); obstacles.splice(i, 1); }
             }
 
             for (let i = tokens.length - 1; i >= 0; i--) {
                 const t = tokens[i];
-                t.position.z += gameSpeed;
+                t.position.z += frameMove;
 
                 let remove = t.position.z > camera.position.z + 20;
                 if (!remove) {
@@ -1113,7 +1096,7 @@
                         remove = true;
                     }
                 }
-                if (remove) { scene.remove(t); tokens.splice(i, 1); }
+                if (remove) { scene.remove(t); disposeObject3D(t); tokens.splice(i, 1); }
             }
 
             // Update scoreboard display
@@ -1159,8 +1142,8 @@
         // Added a parameter to control if animation loop should be restarted immediately
         function resetGame(restartAnimation = true) {
             // Clear existing obstacles and tokens from scene and arrays
-            obstacles.forEach(o => scene.remove(o));
-            tokens.forEach(t => scene.remove(t));
+            obstacles.forEach(o => { scene.remove(o); disposeObject3D(o); });
+            tokens.forEach(t => { scene.remove(t); disposeObject3D(t); });
             obstacles = [];
             tokens = [];
 
@@ -1195,8 +1178,7 @@
                 }
             }
             clock = new THREE.Clock(); // Reset clock for consistent timing
-            lastObstacleSpawnTime = Date.now(); // Reset spawn times for immediate spawn on reset
-            lastTokenSpawnTime = Date.now(); // Reset spawn times for immediate spawn on reset
+            distanceSinceLastSpawn = currentObstacleSpawnDistance; // Spawn a row immediately on reset
 
 
             // Re-setup road segments
@@ -1254,7 +1236,6 @@
         }
 
         window.addEventListener('touchstart', (e) => {
-            if (e.target.id === 'swipe-left' || e.target.id === 'swipe-right') return;
             // Never block touches on interactive elements or while the form is open
             // (doing so prevents the keyboard from appearing on mobile)
             if (isFormElement(e.target) || isFormVisible()) return;
@@ -1265,7 +1246,6 @@
         }, { passive: false });
 
         window.addEventListener('touchend', (e) => {
-            if (e.target.id === 'swipe-left' || e.target.id === 'swipe-right') return;
             if (isFormElement(e.target) || isFormVisible()) return;
             if (isGameOver || isPaused) return;
             e.preventDefault();
@@ -1275,17 +1255,6 @@
                 if (dx < 0) moveLaneLeft(); else moveLaneRight();
             }
         }, { passive: false });
-
-        // Side tap buttons for mobile
-        document.getElementById('swipe-left').addEventListener('touchstart', (e) => {
-            e.preventDefault(); e.stopPropagation(); moveLaneLeft();
-        }, { passive: false });
-        document.getElementById('swipe-right').addEventListener('touchstart', (e) => {
-            e.preventDefault(); e.stopPropagation(); moveLaneRight();
-        }, { passive: false });
-        // Mouse fallback for testing on desktop
-        document.getElementById('swipe-left').addEventListener('mousedown', moveLaneLeft);
-        document.getElementById('swipe-right').addEventListener('mousedown', moveLaneRight);
 
         // Initialize the game when the window loads
         window.onload = function () {
