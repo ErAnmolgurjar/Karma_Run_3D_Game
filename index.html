@@ -256,9 +256,9 @@
     </div>
 
     <!-- Player Name Display -->
-    <div id="player-name-display" style="display: none;">
+    <!-- <div id="player-name-display" style="display: none;">
         Welcome, <span id="current-player-name"></span>
-    </div>
+    </div> -->
 
     <!-- Message box for game over/instructions -->
     <div id="message-box">
@@ -421,8 +421,7 @@
 
             // Camera setup (PerspectiveCamera for 3D view)
             camera = new THREE.PerspectiveCamera(90, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 5, 12);
-            camera.lookAt(0, 1.5, 5);
+            updateCameraFraming();
 
             // Initialize clock for animation updates
             clock = new THREE.Clock();
@@ -574,9 +573,32 @@
 
         // Function to handle window resizing
         function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
+            updateCameraFraming();
             renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // The camera's `fov` (90) is a VERTICAL field of view in three.js, so on
+        // narrow/portrait phone and tablet screens the horizontal FOV shrinks a
+        // lot (e.g. ~48° on a typical portrait phone vs the full 90° vertically),
+        // which was pushing the left/right lanes out of view and hiding the
+        // character when changing lanes. Pull the camera further back on
+        // narrower screens so both side lanes always stay on-screen.
+        const cameraLookAtZ = 5; // matches the player's fixed Z position
+        const cameraHeight = 6.5; // raised slightly for a bit more top-down view
+        const minCameraDistance = 7; // original distance, used on wide (desktop/landscape) screens
+        const maxCameraDistance = 30;
+        function updateCameraFraming() {
+            const aspect = window.innerWidth / window.innerHeight;
+            camera.aspect = aspect;
+
+            const halfViewWidthNeeded = laneWidth + 2.5; // outer lane center + margin for character width
+            const vFovHalfTan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+            let distance = halfViewWidthNeeded / (aspect * vFovHalfTan);
+            distance = THREE.MathUtils.clamp(distance, minCameraDistance, maxCameraDistance);
+
+            camera.position.set(0, cameraHeight, cameraLookAtZ + distance);
+            camera.lookAt(0, 1.5, cameraLookAtZ);
+            camera.updateProjectionMatrix();
         }
 
         // Function to load all 3D assets (tree model and font)
@@ -1106,7 +1128,7 @@
             renderer.render(scene, camera);
 
             // Game over condition (example: if bad karma reaches a certain threshold)
-            if (karma.bad >= 10) {
+            if (karma.bad >= 50) {
                 endGame("Game Over! Too much bad karma.");
             }
         }
